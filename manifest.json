@@ -1,0 +1,10 @@
+{
+  "id": "classpage",
+  "name": "classpage",
+  "version": "0.1.0",
+  "minAppVersion": "1.5.0",
+  "description": "A lightweight classroom page for daily tasks, notices, and Google Form shortcuts.",
+  "author": "piman-code",
+  "authorUrl": "https://github.com/piman-code",
+  "isDesktopOnly": false
+}

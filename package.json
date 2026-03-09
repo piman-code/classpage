@@ -1,0 +1,21 @@
+{
+  "name": "classpage",
+  "version": "0.1.0",
+  "description": "A lightweight Obsidian class page plugin for classroom operations.",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node esbuild.config.mjs production",
+    "dev": "node esbuild.config.mjs",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.10",
+    "builtin-modules": "^4.0.0",
+    "esbuild": "^0.25.1",
+    "obsidian": "^1.8.7",
+    "tslib": "^2.8.1",
+    "typescript": "^5.8.2"
+  }
+}
+
