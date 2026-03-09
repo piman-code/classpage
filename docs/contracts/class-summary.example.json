@@ -4,11 +4,12 @@
   "periodLabel": "2026-03-10 아침",
   "classroom": "3-2",
   "responseCount": 24,
+  "excludedResponseCount": 2,
   "source": {
     "formName": "학급용 Google Form",
     "formUrl": "https://docs.google.com/forms/d/e/1FAIpQLSeBR_cBQFf_CXo6ytCabIMfvStXn_QPSYadonYLKNR6WAT2bg/viewform?usp=header",
     "sheetName": "학급용 응답",
-    "aggregatorNote": "Apps Script가 Google Sheets 응답을 읽어 학급 요약 JSON으로 변환"
+    "aggregatorNote": "Apps Script가 Google Sheets 응답과 허가 학생 명단 시트를 대조해 학급 요약 JSON으로 변환"
   },
   "emotionSummary": [
     { "label": "안정", "count": 14, "note": "전반적으로 안정적" },

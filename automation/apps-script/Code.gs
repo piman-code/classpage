@@ -31,10 +31,28 @@ function previewLessonSummary() {
 
 function validateAutomationSetup() {
   const report = {
-    classSheet: validateSheet_(CLASSPAGE_AUTOMATION_CONFIG.sources.classForm),
-    lessonSheet: validateSheet_(CLASSPAGE_AUTOMATION_CONFIG.sources.lessonForm),
+    classSheet: validateSheet_(
+      CLASSPAGE_AUTOMATION_CONFIG.sources.classForm,
+      ["timestamp", "email", "classroom", "number", "name"],
+    ),
+    lessonSheet: validateSheet_(
+      CLASSPAGE_AUTOMATION_CONFIG.sources.lessonForm,
+      ["timestamp", "email", "classroom", "number", "name", "subject", "period"],
+    ),
+    allowlistSheet: validateSheet_(
+      CLASSPAGE_AUTOMATION_CONFIG.sources.allowlist,
+      ["email", "classroom", "number", "name"],
+    ),
     outputFolder: validateOutputFolder_(),
   };
+
+  if (report.allowlistSheet.ok) {
+    const allowlist = readAllowlistIndex_();
+    report.allowlistSheet.allowedCount = allowlist.allowedCount;
+    if (allowlist.allowedCount === 0) {
+      report.allowlistSheet.message = "정상 연결, 허가 학생 0명";
+    }
+  }
 
   Logger.log(JSON.stringify(report, null, 2));
   return report;
@@ -77,17 +95,22 @@ function doGet(e) {
 function buildClassSummary_() {
   const sourceConfig = CLASSPAGE_AUTOMATION_CONFIG.sources.classForm;
   const rules = CLASSPAGE_AUTOMATION_CONFIG.rules.classSummary;
+  const allowlist = readAllowlistIndex_();
   const rows = readSheetRows_(sourceConfig);
-  const latestRows = dedupeLatestByStudent_(
+  const periodRows = dedupeLatestByStudent_(
     filterRowsForLatestDate_(rows, sourceConfig.headers.timestamp),
     sourceConfig.headers,
   );
+  const allowlistResult = filterRowsByAllowlist_(periodRows, sourceConfig.headers, allowlist);
+  const latestRows = allowlistResult.includedRows;
   const responseCount = latestRows.length;
-  const latestDate = responseCount > 0
-    ? getRowDate_(latestRows[0], sourceConfig.headers.timestamp)
+  const excludedResponseCount = allowlistResult.excludedCount;
+  const referenceRows = latestRows.length > 0 ? latestRows : periodRows;
+  const latestDate = referenceRows.length > 0
+    ? getRowDate_(referenceRows[0], sourceConfig.headers.timestamp)
     : new Date();
   const dateLabel = formatDateOnly_(latestDate);
-  const classroom = getMostCommonValue_(latestRows, sourceConfig.headers.classroom);
+  const classroom = getMostCommonValue_(referenceRows, sourceConfig.headers.classroom);
 
   const emotionLabels = latestRows.map(function (row) {
     return classifyBucketLabel_(
@@ -124,14 +147,15 @@ function buildClassSummary_() {
   return {
     type: "class-summary",
     generatedAt: toIsoString_(new Date()),
-    periodLabel: responseCount > 0 ? dateLabel + " 아침" : "응답 없음",
+    periodLabel: referenceRows.length > 0 ? dateLabel + " 아침" : "응답 없음",
     classroom: classroom,
     responseCount: responseCount,
+    excludedResponseCount: excludedResponseCount,
     source: {
       formName: sourceConfig.formName,
       formUrl: sourceConfig.formUrl,
       sheetName: sourceConfig.sheetName,
-      aggregatorNote: "Apps Script가 학급용 응답 시트에서 정서/목표/도움 필요/칭찬 후보를 규칙 기반으로 집계",
+      aggregatorNote: "Apps Script가 학급용 응답 시트와 허가 학생 명단 시트를 이메일로 대조한 뒤 정서/목표/도움 필요/칭찬 후보를 규칙 기반으로 집계",
     },
     emotionSummary: buildBucketSummary_(emotionLabels, rules.emotionBuckets, "기타", "분류되지 않은 응답"),
     goalSummary: buildBucketSummary_(goalLabels, rules.goalBuckets, "기타", "분류되지 않은 응답"),
@@ -143,14 +167,19 @@ function buildClassSummary_() {
 function buildLessonSummary_() {
   const sourceConfig = CLASSPAGE_AUTOMATION_CONFIG.sources.lessonForm;
   const rules = CLASSPAGE_AUTOMATION_CONFIG.rules.lessonSummary;
+  const allowlist = readAllowlistIndex_();
   const rows = readSheetRows_(sourceConfig);
-  const latestRows = dedupeLatestByStudent_(
+  const periodRows = dedupeLatestByStudent_(
     filterRowsForLatestLessonGroup_(rows, sourceConfig.headers),
     sourceConfig.headers,
   );
+  const allowlistResult = filterRowsByAllowlist_(periodRows, sourceConfig.headers, allowlist);
+  const latestRows = allowlistResult.includedRows;
   const responseCount = latestRows.length;
-  const latestRow = responseCount > 0 ? latestRows[0] : null;
-  const classroom = getMostCommonValue_(latestRows, sourceConfig.headers.classroom);
+  const excludedResponseCount = allowlistResult.excludedCount;
+  const referenceRows = latestRows.length > 0 ? latestRows : periodRows;
+  const latestRow = referenceRows.length > 0 ? referenceRows[0] : null;
+  const classroom = getMostCommonValue_(referenceRows, sourceConfig.headers.classroom);
   const subject = latestRow ? getRowValue_(latestRow, sourceConfig.headers.subject) : "";
   const periodLabel = latestRow
     ? buildLessonPeriodLabel_(latestRow, sourceConfig.headers)
@@ -229,11 +258,12 @@ function buildLessonSummary_() {
     classroom: classroom,
     subject: subject,
     responseCount: responseCount,
+    excludedResponseCount: excludedResponseCount,
     source: {
       formName: sourceConfig.formName,
       formUrl: sourceConfig.formUrl,
       sheetName: sourceConfig.sheetName,
-      aggregatorNote: "Apps Script가 수업용 응답 시트에서 개념 난도/정오답/과제/보충 필요 학생을 규칙 기반으로 집계",
+      aggregatorNote: "Apps Script가 수업용 응답 시트와 허가 학생 명단 시트를 이메일로 대조한 뒤 개념 난도/정오답/과제/보충 필요 학생을 규칙 기반으로 집계",
     },
     overview: {
       averageCorrectCount: roundToOneDecimal_(averageCorrectCount),
@@ -247,7 +277,7 @@ function buildLessonSummary_() {
   };
 }
 
-function validateSheet_(sourceConfig) {
+function validateSheet_(sourceConfig, requiredHeaderKeys) {
   const result = {
     spreadsheetId: sourceConfig.spreadsheetId || "(active spreadsheet)",
     sheetName: sourceConfig.sheetName,
@@ -257,8 +287,21 @@ function validateSheet_(sourceConfig) {
 
   try {
     const sheet = getSourceSheet_(sourceConfig);
-    result.ok = !!sheet;
-    result.message = sheet ? "정상 연결" : "시트를 찾지 못함";
+    const headerLabels = readSheetHeaderLabels_(sheet);
+    const missingHeaders = (requiredHeaderKeys || [])
+      .map(function (key) {
+        return sourceConfig.headers && sourceConfig.headers[key]
+          ? String(sourceConfig.headers[key]).trim()
+          : "";
+      })
+      .filter(function (label) {
+        return label && headerLabels.indexOf(label) === -1;
+      });
+
+    result.ok = !!sheet && missingHeaders.length === 0;
+    result.message = missingHeaders.length === 0
+      ? "정상 연결"
+      : "헤더를 찾을 수 없습니다: " + missingHeaders.join(", ");
   } catch (error) {
     result.message = error && error.message ? error.message : "알 수 없는 오류";
   }
@@ -314,9 +357,7 @@ function readSheetRows_(sourceConfig) {
     return [];
   }
 
-  const headers = values[0].map(function (header) {
-    return String(header).trim();
-  });
+  const headers = readSheetHeaderLabels_(sheet);
 
   return values.slice(1)
     .filter(function (row) {
@@ -331,6 +372,92 @@ function readSheetRows_(sourceConfig) {
       });
       return item;
     });
+}
+
+function readSheetHeaderLabels_(sheet) {
+  const values = sheet.getDataRange().getValues();
+  if (values.length === 0) {
+    return [];
+  }
+
+  return values[0].map(function (header) {
+    return String(header).trim();
+  });
+}
+
+function readAllowlistIndex_() {
+  const sourceConfig = CLASSPAGE_AUTOMATION_CONFIG.sources.allowlist;
+  const rows = readSheetRows_(sourceConfig);
+  return buildAllowlistIndex_(rows, sourceConfig.headers);
+}
+
+function buildAllowlistIndex_(rows, headers) {
+  const byEmail = {};
+
+  rows.forEach(function (row) {
+    const email = normalizeEmail_(getRowValue_(row, headers.email));
+    if (!email) {
+      return;
+    }
+
+    if (!isAllowlistRowActive_(getRowValue_(row, headers.active))) {
+      return;
+    }
+
+    byEmail[email] = {
+      email: email,
+      classroom: getRowValue_(row, headers.classroom),
+      number: getRowValue_(row, headers.number),
+      name: getRowValue_(row, headers.name),
+    };
+  });
+
+  return {
+    byEmail: byEmail,
+    allowedCount: Object.keys(byEmail).length,
+  };
+}
+
+function filterRowsByAllowlist_(rows, responseHeaders, allowlist) {
+  const includedRows = [];
+  let excludedCount = 0;
+
+  rows.forEach(function (row) {
+    const email = normalizeEmail_(getRowValue_(row, responseHeaders.email));
+    const allowlistStudent = email ? allowlist.byEmail[email] : null;
+
+    if (!allowlistStudent) {
+      excludedCount += 1;
+      return;
+    }
+
+    includedRows.push(bindAllowlistStudent_(row, responseHeaders, allowlistStudent));
+  });
+
+  return {
+    includedRows: includedRows,
+    excludedCount: excludedCount,
+  };
+}
+
+function bindAllowlistStudent_(row, headers, allowlistStudent) {
+  const copy = {};
+
+  Object.keys(row).forEach(function (key) {
+    copy[key] = row[key];
+  });
+
+  if (headers.classroom && allowlistStudent.classroom) {
+    copy[headers.classroom] = allowlistStudent.classroom;
+  }
+  if (headers.number && allowlistStudent.number) {
+    copy[headers.number] = allowlistStudent.number;
+  }
+  if (headers.name && allowlistStudent.name) {
+    copy[headers.name] = allowlistStudent.name;
+  }
+
+  return copy;
 }
 
 function getSourceSheet_(sourceConfig) {
@@ -677,6 +804,14 @@ function buildLessonPeriodLabel_(row, headers) {
 }
 
 function buildStudentKey_(row, headers) {
+  const email = headers.email
+    ? normalizeEmail_(getRowValue_(row, headers.email))
+    : "";
+
+  if (email) {
+    return "email|" + email;
+  }
+
   return [
     getRowValue_(row, headers.classroom),
     getRowValue_(row, headers.number),
@@ -840,6 +975,36 @@ function containsAnyKeyword_(text, keywords) {
 
 function normalizeText_(value) {
   return String(value || "").trim().toLowerCase();
+}
+
+function normalizeEmail_(value) {
+  return normalizeText_(value);
+}
+
+function isAllowlistRowActive_(value) {
+  if (value === true) {
+    return true;
+  }
+
+  if (value === false) {
+    return false;
+  }
+
+  const normalized = normalizeText_(value);
+  if (!normalized) {
+    return true;
+  }
+
+  return [
+    "0",
+    "false",
+    "n",
+    "no",
+    "제외",
+    "비활성",
+    "사용안함",
+    "사용 안 함",
+  ].indexOf(normalized) === -1;
 }
 
 function firstNonEmpty_() {

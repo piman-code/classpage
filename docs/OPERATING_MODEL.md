@@ -12,7 +12,7 @@
 2. 교사용 페이지
    교사가 보는 화면입니다. 이미 계산된 요약 결과만 빠르게 확인합니다.
 3. 집계 레이어
-   Google Sheets / Apps Script / 외부 자동화가 학생 응답을 요약 JSON으로 변환합니다.
+   Google Sheets / Apps Script / 외부 자동화가 학생 응답을 허가 학생 명단과 대조한 뒤 요약 JSON으로 변환합니다.
 4. 표시 레이어
    classpage가 JSON 파일을 읽어 요약 카드와 목록으로 보여줍니다.
 
@@ -20,6 +20,7 @@
 
 - 수집은 Google Form
 - 원본 저장은 Google Sheets
+- 검증은 allowlist 시트와 이메일 대조
 - 계산은 Apps Script 또는 외부 자동화
 - 표시는 classpage
 
@@ -29,17 +30,21 @@
 
 1. 학생이 학급용 Google Form을 제출합니다.
 2. 응답이 Google Sheets에 쌓입니다.
-3. Apps Script가 정서 상태, 목표 달성 정도, 도움이 필요한 학생, 칭찬 후보를 계산합니다.
-4. 결과를 `class-summary.json`으로 만듭니다.
-5. JSON 파일이 Obsidian 볼트의 `classpage-data/class-summary.json`에 들어오면 classpage가 표시합니다.
+3. Apps Script가 응답 이메일을 허가 학생 명단과 대조합니다.
+4. 허가된 응답만으로 정서 상태, 목표 달성 정도, 도움이 필요한 학생, 칭찬 후보를 계산합니다.
+5. 제외된 응답 수는 최소 정보로만 남깁니다.
+6. 결과를 `class-summary.json`으로 만듭니다.
+7. JSON 파일이 Obsidian 볼트의 `classpage-data/class-summary.json`에 들어오면 classpage가 표시합니다.
 
 ### 수업용 폼
 
 1. 학생이 수업용 Google Form을 제출합니다.
 2. 응답이 Google Sheets에 쌓입니다.
-3. Apps Script가 어려워한 개념, 정오답 현황, 과제 수행 정도, 보충 지도 필요 학생을 계산합니다.
-4. 결과를 `lesson-summary.json`으로 만듭니다.
-5. JSON 파일이 Obsidian 볼트의 `classpage-data/lesson-summary.json`에 들어오면 classpage가 표시합니다.
+3. Apps Script가 응답 이메일을 허가 학생 명단과 대조합니다.
+4. 허가된 응답만으로 어려워한 개념, 정오답 현황, 과제 수행 정도, 보충 지도 필요 학생을 계산합니다.
+5. 제외된 응답 수는 최소 정보로만 남깁니다.
+6. 결과를 `lesson-summary.json`으로 만듭니다.
+7. JSON 파일이 Obsidian 볼트의 `classpage-data/lesson-summary.json`에 들어오면 classpage가 표시합니다.
 
 ## 3. 학생용 페이지 구조
 
@@ -88,6 +93,7 @@
 classpage는 아래를 계산하지 않고 표시만 합니다.
 
 - 응답 수
+- 제외된 응답 수
 - 정서 상태 분포
 - 목표 달성 분포
 - 어려워한 개념

@@ -8,7 +8,7 @@
 `classpage`는 수집, 집계, 표시를 한 곳에 몰아넣지 않습니다.
 
 - 학생용 페이지: 정적 설정과 Google Form 링크만 표시
-- 집계 레이어: Google Sheets / Apps Script가 계산 담당
+- 집계 레이어: Google Sheets / Apps Script가 허가 학생 검증과 계산 담당
 - 교사용 페이지: 집계 JSON만 읽어 요약 표시
 
 이 구조를 택한 이유는 운영자가 아래를 구분할 수 있어야 하기 때문입니다.
@@ -38,7 +38,7 @@ Drive 자동 갱신 + Mac 자동 복사 운영은 [docs/DRIVE_SYNC_SETUP.md](/Us
 
 1. 학생이 Google Form을 제출합니다.
 2. 응답이 Google Sheets에 저장됩니다.
-3. Apps Script 또는 외부 자동화가 교사용 요약 JSON을 생성합니다.
+3. Apps Script 또는 외부 자동화가 허가 학생 명단과 이메일을 대조한 뒤 교사용 요약 JSON을 생성합니다.
 4. JSON 파일이 Obsidian 볼트 안 경로에 저장됩니다.
 5. classpage 교사용 화면이 그 JSON만 읽어 표시합니다.
 
@@ -78,6 +78,7 @@ Drive 자동 갱신 + Mac 자동 복사 운영은 [docs/DRIVE_SYNC_SETUP.md](/Us
 
 - 교사용 화면의 숫자와 목록은 설정값이 아니라 집계 JSON 결과입니다.
 - 집계 로직 자체는 classpage 안에 없습니다.
+- 허가 학생 검증도 classpage 밖의 Apps Script / allowlist 시트에서 처리합니다.
 - 결과를 바꾸려면 Google Sheets / Apps Script / JSON 생성 로직을 수정해야 합니다.
 
 ## 설치

@@ -84,6 +84,7 @@ export interface ClassSummaryAggregate {
   periodLabel: string;
   classroom: string;
   responseCount: number;
+  excludedResponseCount: number;
   source: AggregateSourceInfo;
   emotionSummary: AggregateCountItem[];
   goalSummary: AggregateCountItem[];
@@ -128,6 +129,7 @@ export interface LessonSummaryAggregate {
   classroom: string;
   subject: string;
   responseCount: number;
+  excludedResponseCount: number;
   source: AggregateSourceInfo;
   overview: LessonOverview;
   difficultConcepts: ConceptDifficulty[];

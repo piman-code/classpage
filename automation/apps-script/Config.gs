@@ -14,6 +14,7 @@ const CLASSPAGE_AUTOMATION_CONFIG = {
         "https://docs.google.com/forms/d/e/1FAIpQLSeBR_cBQFf_CXo6ytCabIMfvStXn_QPSYadonYLKNR6WAT2bg/viewform?usp=header",
       headers: {
         timestamp: "타임스탬프",
+        email: "이메일 주소",
         classroom: "반",
         number: "번호",
         name: "이름",
@@ -34,6 +35,7 @@ const CLASSPAGE_AUTOMATION_CONFIG = {
         "https://docs.google.com/forms/d/e/1FAIpQLSefjZ3vyJs6T5PkkrUQDo2JY1wNh8cHPdeieRWRFVsMzu-_NA/viewform?usp=header",
       headers: {
         timestamp: "타임스탬프",
+        email: "이메일 주소",
         classroom: "반",
         number: "번호",
         name: "이름",
@@ -50,6 +52,17 @@ const CLASSPAGE_AUTOMATION_CONFIG = {
         incorrectReason: "틀린 이유",
         teacherMessage: "선생님께 하고 싶은 말",
         assignmentStatus: "과제 수행 정도",
+      },
+    },
+    allowlist: {
+      spreadsheetId: "",
+      sheetName: "허가 학생 명단",
+      headers: {
+        email: "이메일 주소",
+        classroom: "반",
+        number: "번호",
+        name: "이름",
+        active: "허가",
       },
     },
   },

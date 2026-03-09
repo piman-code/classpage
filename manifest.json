@@ -1,7 +1,7 @@
 {
   "id": "classpage",
   "name": "classpage",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "minAppVersion": "1.5.0",
   "description": "A lightweight classroom page for student forms and teacher summaries.",
   "author": "piman-code",

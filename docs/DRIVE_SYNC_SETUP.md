@@ -2,7 +2,7 @@
 
 이 문서는 아래 구조를 초보자도 따라할 수 있게 설명합니다.
 
-`Google Form -> Google Sheets -> Apps Script -> Google Drive 폴더 -> Mac 동기화 폴더 -> Obsidian 볼트 classpage-data -> classpage 교사용 페이지`
+`Google Form -> Google Sheets -> allowlist 대조 -> Apps Script -> Google Drive 폴더 -> Mac 동기화 폴더 -> Obsidian 볼트 classpage-data -> classpage 교사용 페이지`
 
 이 방식의 장점은 다음과 같습니다.
 
@@ -19,6 +19,8 @@
 2. Google Drive for desktop이 그 폴더를 Mac 로컬 동기화 폴더로 내려받습니다.
 3. Mac의 짧은 쉘 스크립트가 그 JSON 파일을 Obsidian 볼트의 `classpage-data/` 폴더로 복사합니다.
 4. `classpage`는 기존처럼 로컬 JSON만 읽습니다.
+
+allowlist 검증은 Apps Script 단계에서 이미 끝나므로, Mac 자동 복사 쪽에서는 추가 검증 없이 파일만 안정적으로 옮기면 됩니다.
 
 이 구조를 권장하는 이유는 다음과 같습니다.
 

@@ -468,7 +468,14 @@ class ClassPageView extends ItemView {
 
     const metaList = card.createEl("dl", { cls: "classpage-meta-list" });
     this.renderMetaRow(metaList, "집계 시각", formatDateLabel(sourceState.data.generatedAt));
-    this.renderMetaRow(metaList, "응답 수", `${sourceState.data.responseCount}건`);
+    this.renderMetaRow(metaList, "반영 응답", `${sourceState.data.responseCount}건`);
+    if (sourceState.data.excludedResponseCount > 0) {
+      this.renderMetaRow(
+        metaList,
+        "제외 응답",
+        `${sourceState.data.excludedResponseCount}건`,
+      );
+    }
     this.renderMetaRow(metaList, "범위", sourceState.data.periodLabel);
 
     if (sourceState.data.source.formName) {
@@ -494,7 +501,12 @@ class ClassPageView extends ItemView {
 
     const summary = sourceState.data;
     const stats = parent.createDiv({ cls: "classpage-stat-grid" });
-    this.renderStatCard(stats, "응답 수", `${summary.responseCount}`, summary.periodLabel);
+    this.renderStatCard(
+      stats,
+      "응답 수",
+      `${summary.responseCount}`,
+      this.buildResponseCountDescription(summary),
+    );
     this.renderStatCard(
       stats,
       "정서 주의 학생",
@@ -568,7 +580,12 @@ class ClassPageView extends ItemView {
 
     const summary = sourceState.data;
     const stats = parent.createDiv({ cls: "classpage-stat-grid" });
-    this.renderStatCard(stats, "응답 수", `${summary.responseCount}`, summary.periodLabel);
+    this.renderStatCard(
+      stats,
+      "응답 수",
+      `${summary.responseCount}`,
+      this.buildResponseCountDescription(summary),
+    );
     this.renderStatCard(
       stats,
       "평균 정답",
@@ -774,7 +791,10 @@ class ClassPageView extends ItemView {
     return [
       sourceState.data.classroom,
       sourceState.data.periodLabel,
-      `${sourceState.data.responseCount}건 응답`,
+      `${sourceState.data.responseCount}건 반영`,
+      sourceState.data.excludedResponseCount > 0
+        ? `제외 ${sourceState.data.excludedResponseCount}건`
+        : "",
     ].filter(Boolean).join(" · ");
   }
 
@@ -789,8 +809,21 @@ class ClassPageView extends ItemView {
       sourceState.data.classroom,
       sourceState.data.subject,
       sourceState.data.periodLabel,
-      `${sourceState.data.responseCount}건 응답`,
+      `${sourceState.data.responseCount}건 반영`,
+      sourceState.data.excludedResponseCount > 0
+        ? `제외 ${sourceState.data.excludedResponseCount}건`
+        : "",
     ].filter(Boolean).join(" · ");
+  }
+
+  private buildResponseCountDescription(
+    summary: Pick<ClassSummaryAggregate | LessonSummaryAggregate, "periodLabel" | "excludedResponseCount">,
+  ): string {
+    if (summary.excludedResponseCount > 0) {
+      return `${summary.periodLabel} / 제외 ${summary.excludedResponseCount}건`;
+    }
+
+    return `${summary.periodLabel} / 허가 학생 기준`;
   }
 
   private getSourceStatusLabel(

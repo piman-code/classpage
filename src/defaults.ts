@@ -378,6 +378,9 @@ export function normalizeClassSummaryAggregate(value: unknown): ClassSummaryAggr
     responseCount: Number.isFinite(summary.responseCount)
       ? Number(summary.responseCount)
       : 0,
+    excludedResponseCount: Number.isFinite(summary.excludedResponseCount)
+      ? Number(summary.excludedResponseCount)
+      : 0,
     source: {
       ...DEFAULT_SOURCE_INFO,
       ...normalizeSourceInfo(summary.source),
@@ -415,6 +418,9 @@ export function normalizeLessonSummaryAggregate(value: unknown): LessonSummaryAg
     subject: normalizeString(summary.subject, ""),
     responseCount: Number.isFinite(summary.responseCount)
       ? Number(summary.responseCount)
+      : 0,
+    excludedResponseCount: Number.isFinite(summary.excludedResponseCount)
+      ? Number(summary.excludedResponseCount)
       : 0,
     source: {
       ...DEFAULT_SOURCE_INFO,

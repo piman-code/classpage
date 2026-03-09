@@ -4,7 +4,7 @@
 
 이 문서는 아래 흐름을 처음부터 따라 하려는 운영자를 위한 안내입니다.
 
-`Google Form -> Google Sheets -> Apps Script -> JSON -> classpage 교사용 페이지`
+`Google Form -> Google Sheets -> allowlist 대조 -> Apps Script -> JSON -> classpage 교사용 페이지`
 
 목표는 자동화 UI를 더 만드는 것이 아니라, 지금 있는 구조를 초보자도 이해하고 직접 연결할 수 있게 하는 것입니다.
 
@@ -15,9 +15,10 @@
 1. Obsidian에 `classpage`를 BRAT로 설치합니다.
 2. 학생용 페이지가 열리는지 확인합니다.
 3. Google Form 응답을 Google Sheets에 연결합니다.
-4. Apps Script에서 집계 JSON을 미리 봅니다.
-5. `class-summary.json`, `lesson-summary.json`을 Obsidian 볼트에 넣습니다.
-6. classpage 교사용 페이지에서 집계 결과가 보이는지 확인합니다.
+4. 허가 학생 명단 allowlist 시트를 준비합니다.
+5. Apps Script에서 집계 JSON을 미리 봅니다.
+6. `class-summary.json`, `lesson-summary.json`을 Obsidian 볼트에 넣습니다.
+7. classpage 교사용 페이지에서 집계 결과가 보이는지 확인합니다.
 
 처음에는 모든 것을 자동화하려고 하지 않는 편이 좋습니다.  
 가장 쉬운 첫 성공 경로는 아래입니다.
@@ -89,7 +90,8 @@ Apps Script가 집계해서 만들어 내는 최종 결과 파일입니다.
 3. Google 계정
 4. Obsidian 설치
 5. Obsidian 볼트 1개
-6. 인터넷이 되는 브라우저
+6. 허가 학생 명단을 적을 Google Sheets 시트 1개
+7. 인터넷이 되는 브라우저
 
 아직 `classpage` 플러그인을 설치하지 않았다면 바로 아래 단계부터 진행하면 됩니다.
 
@@ -170,13 +172,14 @@ Apps Script가 집계해서 만들어 내는 최종 결과 파일입니다.
 
 1. Google Form 응답을 Google Sheets에 연결합니다.
 2. 각 응답 시트의 `spreadsheetId`, `sheetName`, `headers`를 확인합니다.
-3. Apps Script 프로젝트를 만듭니다.
-4. `Config.gs`, `Code.gs`, `appsscript.json` 내용을 붙여넣습니다.
-5. `Config.gs`에서 시트 연결값을 수정합니다.
-6. `validateAutomationSetup()`을 실행해서 연결 상태를 확인합니다.
-7. `previewClassSummary()`와 `previewLessonSummary()`를 실행해서 집계 결과를 미리 봅니다.
-8. JSON 파일을 생성하거나 복사해서 Obsidian 볼트 안에 넣습니다.
-9. classpage 설정에서 JSON 경로를 연결합니다.
+3. 허가 학생 명단 allowlist 시트를 준비합니다.
+4. Apps Script 프로젝트를 만듭니다.
+5. `Config.gs`, `Code.gs`, `appsscript.json` 내용을 붙여넣습니다.
+6. `Config.gs`에서 시트 연결값을 수정합니다.
+7. `validateAutomationSetup()`을 실행해서 연결 상태를 확인합니다.
+8. `previewClassSummary()`와 `previewLessonSummary()`를 실행해서 집계 결과를 미리 봅니다.
+9. JSON 파일을 생성하거나 복사해서 Obsidian 볼트 안에 넣습니다.
+10. classpage 설정에서 JSON 경로를 연결합니다.
 
 ## 6. Google Form 응답을 Google Sheets에 연결하기
 
@@ -211,6 +214,30 @@ Apps Script가 집계해서 만들어 내는 최종 결과 파일입니다.
 - Form만 만들고 응답 시트를 연결하지 않음
 - 학급용 폼과 수업용 폼이 같은 시트에 뒤섞여 들어가게 만듦
 - 질문 제목을 바꿨는데 응답 시트의 1행 제목 확인을 생략함
+
+### 6-3. 이메일 수집과 Workspace 로그인 확인
+
+이번 구조에서는 응답 이메일 주소가 allowlist 검증의 1차 기준입니다.  
+따라서 Google Form 쪽에서도 아래가 켜져 있어야 합니다.
+
+1. Google Workspace 계정 로그인 필요
+2. 이메일 주소 수집
+3. 1회 제출 제한
+
+### 왜 필요한가
+
+- Form 자체에서 외부 사용자를 1차로 줄입니다.
+- Apps Script는 응답 시트의 이메일 주소를 allowlist와 다시 대조합니다.
+- 두 단계를 같이 써야 운영자가 더 안심하고 볼 수 있습니다.
+
+### 정상이라면 보이는 결과
+
+- 응답 시트에 보통 `이메일 주소` 열이 생깁니다.
+
+### 자주 틀리는 부분
+
+- 로그인 제한은 켰지만 이메일 수집을 안 켬
+- 이메일 열이 생기지 않았는데 `headers.email`은 그대로 둠
 
 ## 7. spreadsheetId 찾기
 
@@ -281,6 +308,46 @@ https://docs.google.com/spreadsheets/d/1AbCdEfGhIjKlMnOpQrStUvWxYz1234567890/edi
 - `개념1 이해 정도`와 `개념 1 이해 정도`처럼 띄어쓰기를 다르게 적음
 - 탭 이름이 `Form Responses 1`인데 `수업용 응답`이라고 가정함
 - 시트 첫 행을 직접 수정해 놓고 `headers`는 옛 이름으로 둠
+
+### allowlist 시트 확인 방법
+
+허가 학생 명단은 응답 시트와 분리된 별도 시트로 관리합니다.
+
+왜 따로 두는가:
+
+- Form을 새로 만들어도 허가 학생 명단은 그대로 유지하기 쉽습니다.
+- 응답 원본과 허가 명단을 분리하면 누가 허가 학생인지 명확합니다.
+- 학생이 잘못 이름을 적어도 이메일 기준으로 포함/제외를 판단할 수 있습니다.
+
+권장 시트 이름:
+
+- `허가 학생 명단`
+
+권장 헤더:
+
+- `이메일 주소`
+- `반`
+- `번호`
+- `이름`
+- `허가`
+
+중요:
+
+- 실제 포함 여부는 이메일 주소의 정확한 일치로 판단합니다.
+- 이메일 비교는 대소문자를 구분하지 않도록 소문자로 정규화해서 처리합니다.
+- `허가` 열이 비어 있으면 기본적으로 허가로 봅니다.
+- `허가` 열이 `false`, `0`, `no`, `제외`, `비활성` 같은 값이면 제외합니다.
+
+### 정상이라면 보이는 결과
+
+- allowlist 시트 한 줄이 학생 한 명을 뜻합니다.
+- 같은 이메일이 여러 줄이면 마지막 값이 우선한다고 생각하는 편이 안전합니다.
+
+### 자주 틀리는 부분
+
+- 이메일 주소 대신 이름을 1차 키처럼 사용하려고 함
+- 허가 학생 명단을 응답 시트와 같은 탭에 섞어 넣음
+- 학생 이메일과 allowlist 이메일이 한 글자라도 다름
 
 ## 9. Apps Script 프로젝트 만들기
 
@@ -359,6 +426,26 @@ https://docs.google.com/spreadsheets/d/1AbCdEfGhIjKlMnOpQrStUvWxYz1234567890/edi
 - `sheetName`은 아래 탭 이름을 그대로 복사합니다.
 - `headers`는 시트 1행과 한 글자도 다르지 않게 맞춥니다.
 
+### 10-4. allowlist 관련 설정
+
+이번 단계에서 추가로 꼭 확인할 값은 아래입니다.
+
+- `sources.classForm.headers.email`
+- `sources.lessonForm.headers.email`
+- `sources.allowlist.spreadsheetId`
+- `sources.allowlist.sheetName`
+- `sources.allowlist.headers.email`
+- `sources.allowlist.headers.classroom`
+- `sources.allowlist.headers.number`
+- `sources.allowlist.headers.name`
+- `sources.allowlist.headers.active`
+
+중요:
+
+- 응답 시트의 `headers.email`은 학생이 실제로 제출한 이메일 주소 열입니다.
+- allowlist 시트의 `headers.email`은 허가 학생 명단 이메일 열입니다.
+- Apps Script는 이 두 이메일이 일치할 때만 응답을 집계에 반영합니다.
+
 ## 11. 학급용 설정 예시
 
 아래는 학급용 폼 설정 예시입니다.
@@ -371,6 +458,7 @@ classForm: {
   formUrl: "https://docs.google.com/forms/d/e/1FAIpQLSeBR_cBQFf_CXo6ytCabIMfvStXn_QPSYadonYLKNR6WAT2bg/viewform?usp=header",
   headers: {
     timestamp: "타임스탬프",
+    email: "이메일 주소",
     classroom: "반",
     number: "번호",
     name: "이름",
@@ -414,6 +502,7 @@ lessonForm: {
   formUrl: "https://docs.google.com/forms/d/e/1FAIpQLSefjZ3vyJs6T5PkkrUQDo2JY1wNh8cHPdeieRWRFVsMzu-_NA/viewform?usp=header",
   headers: {
     timestamp: "타임스탬프",
+    email: "이메일 주소",
     classroom: "반",
     number: "번호",
     name: "이름",
@@ -451,6 +540,40 @@ lessonForm: {
 - `previewLessonSummary()` 실행 시 `type: "lesson-summary"`가 보입니다.
 - `subject`, `periodLabel`, `responseCount`가 실제 수업과 맞으면 정상입니다.
 
+### allowlist 설정 예시
+
+아래는 허가 학생 명단 시트 설정 예시입니다.
+
+```javascript
+allowlist: {
+  spreadsheetId: "1LmNoPqRsTuVwXyZaBcDeFgHiJk9876543210",
+  sheetName: "허가 학생 명단",
+  headers: {
+    email: "이메일 주소",
+    classroom: "반",
+    number: "번호",
+    name: "이름",
+    active: "허가",
+  },
+}
+```
+
+### 여기서 복사할 값
+
+- 허가 학생 명단 시트의 `spreadsheetId`
+- 허가 학생 명단 시트의 `sheetName`
+- 1행의 이메일/학생 정보 헤더
+
+### 여기서 수정할 값
+
+- 실제 allowlist 시트 이름
+- 실제 헤더 이름
+
+### 정상이라면 보이는 결과
+
+- allowlist 시트에 있는 이메일만 집계에 반영됩니다.
+- 허가되지 않은 이메일 응답은 집계 숫자에서 빠집니다.
+
 ## 13. validateAutomationSetup() 실행하기
 
 이 단계는 "시트 연결이 맞는지" 먼저 확인하는 단계입니다.
@@ -472,6 +595,7 @@ lessonForm: {
 {
   "classSheet": { "ok": true, "message": "정상 연결" },
   "lessonSheet": { "ok": true, "message": "정상 연결" },
+  "allowlistSheet": { "ok": true, "message": "정상 연결", "allowedCount": 28 },
   "outputFolder": { "ok": false, "message": "driveFolderId가 비어 있습니다..." }
 }
 ```
@@ -483,6 +607,7 @@ lessonForm: {
 - 권한 승인 창을 닫아 버림
 - `sheetName` 오타
 - `spreadsheetId`에 시트 URL 전체를 넣음
+- allowlist 시트는 만들지 않았는데 집계가 0건이라고 생각함
 
 ## 14. previewClassSummary() / previewLessonSummary() 실행하기
 
@@ -508,6 +633,7 @@ lessonForm: {
 - `generatedAt`
 - `periodLabel`
 - `responseCount`
+- `excludedResponseCount`
 - `emotionSummary`
 - `goalSummary`
 
@@ -517,6 +643,7 @@ lessonForm: {
 - `generatedAt`
 - `periodLabel`
 - `subject`
+- `excludedResponseCount`
 - `overview`
 - `difficultConcepts`
 - `studentResults`
@@ -526,7 +653,7 @@ lessonForm: {
 - 학급용은 되는데 수업용만 안 됨
   보통 `headers` 이름이 안 맞거나, `date / period / subject` 열이 비어 있는 경우가 많습니다.
 - `responseCount`가 0
-  응답 시트 자체가 비었거나, 최근 수업 그룹으로 묶이는 기준이 예상과 다를 수 있습니다.
+  응답 시트 자체가 비었거나, 최근 수업 그룹으로 묶이는 기준이 예상과 다를 수 있습니다. allowlist에 없는 이메일만 제출한 경우도 여기에 해당합니다.
 - `type`은 맞는데 값이 이상함
   열 제목이 다른 질문과 잘못 연결되었을 가능성이 큽니다.
 
@@ -675,6 +802,7 @@ Obsidian에서 아래로 들어갑니다.
 시트는 열리지만 집계 값이 이상하면 여기서 드러납니다.
 
 - `responseCount`
+- `excludedResponseCount`
 - `periodLabel`
 - `subject`
 - `emotionSummary`
@@ -734,6 +862,14 @@ Apps Script는 정상인데 classpage에서 안 보이면 여기입니다.
 - 미리 보기 단계에서 규칙을 충분히 확인하지 않음
 - 실제 응답 문구가 `emotionBuckets`, `goalBuckets`, `assignmentBuckets`와 잘 맞지 않음
 
+### 사례 5. 학생이 제출했는데 집계에 안 잡힘
+
+원인 후보:
+
+- allowlist 시트에 그 학생 이메일이 없음
+- 응답 시트 이메일과 allowlist 이메일이 다름
+- allowlist의 `허가` 값이 제외 상태로 들어감
+
 ## 19. 폼을 새로 만들었을 때 갱신해야 하는 항목 체크리스트
 
 폼 문항이나 연결이 바뀌면 아래를 순서대로 확인하면 됩니다.
@@ -749,6 +885,12 @@ Apps Script는 정상인데 classpage에서 안 보이면 여기입니다.
 9. `validateAutomationSetup()` 다시 실행
 10. `previewClassSummary()` 또는 `previewLessonSummary()` 다시 실행
 11. 학생용 페이지 버튼 링크도 새 Form URL로 바뀌어야 하면 classpage 설정에서 함께 수정
+
+중요:
+
+- allowlist 시트는 보통 폼을 새로 만들어도 그대로 유지할 수 있습니다.
+- 다만 새 폼에서도 이메일 수집이 계속 켜져 있어야 합니다.
+- 응답 시트의 이메일 헤더 이름이 바뀌면 `headers.email`은 다시 확인해야 합니다.
 
 ## 20. 지금 단계에서 굳이 하지 않아도 되는 것
 

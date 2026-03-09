@@ -305,6 +305,7 @@ function normalizeClassSummaryAggregate(value) {
     periodLabel: normalizeString(summary.periodLabel, "\uD559\uAE09 \uC9D1\uACC4"),
     classroom: normalizeString(summary.classroom, ""),
     responseCount: Number.isFinite(summary.responseCount) ? Number(summary.responseCount) : 0,
+    excludedResponseCount: Number.isFinite(summary.excludedResponseCount) ? Number(summary.excludedResponseCount) : 0,
     source: {
       ...DEFAULT_SOURCE_INFO,
       ...normalizeSourceInfo(summary.source)
@@ -327,6 +328,7 @@ function normalizeLessonSummaryAggregate(value) {
     classroom: normalizeString(summary.classroom, ""),
     subject: normalizeString(summary.subject, ""),
     responseCount: Number.isFinite(summary.responseCount) ? Number(summary.responseCount) : 0,
+    excludedResponseCount: Number.isFinite(summary.excludedResponseCount) ? Number(summary.excludedResponseCount) : 0,
     source: {
       ...DEFAULT_SOURCE_INFO,
       ...normalizeSourceInfo(summary.source)
@@ -746,7 +748,14 @@ var ClassPageView = class extends import_obsidian2.ItemView {
     }
     const metaList = card.createEl("dl", { cls: "classpage-meta-list" });
     this.renderMetaRow(metaList, "\uC9D1\uACC4 \uC2DC\uAC01", formatDateLabel(sourceState.data.generatedAt));
-    this.renderMetaRow(metaList, "\uC751\uB2F5 \uC218", `${sourceState.data.responseCount}\uAC74`);
+    this.renderMetaRow(metaList, "\uBC18\uC601 \uC751\uB2F5", `${sourceState.data.responseCount}\uAC74`);
+    if (sourceState.data.excludedResponseCount > 0) {
+      this.renderMetaRow(
+        metaList,
+        "\uC81C\uC678 \uC751\uB2F5",
+        `${sourceState.data.excludedResponseCount}\uAC74`
+      );
+    }
     this.renderMetaRow(metaList, "\uBC94\uC704", sourceState.data.periodLabel);
     if (sourceState.data.source.formName) {
       this.renderMetaRow(metaList, "\uC6D0\uBCF8 \uD3FC", sourceState.data.source.formName);
@@ -765,7 +774,12 @@ var ClassPageView = class extends import_obsidian2.ItemView {
     }
     const summary = sourceState.data;
     const stats = parent.createDiv({ cls: "classpage-stat-grid" });
-    this.renderStatCard(stats, "\uC751\uB2F5 \uC218", `${summary.responseCount}`, summary.periodLabel);
+    this.renderStatCard(
+      stats,
+      "\uC751\uB2F5 \uC218",
+      `${summary.responseCount}`,
+      this.buildResponseCountDescription(summary)
+    );
     this.renderStatCard(
       stats,
       "\uC815\uC11C \uC8FC\uC758 \uD559\uC0DD",
@@ -832,7 +846,12 @@ var ClassPageView = class extends import_obsidian2.ItemView {
     }
     const summary = sourceState.data;
     const stats = parent.createDiv({ cls: "classpage-stat-grid" });
-    this.renderStatCard(stats, "\uC751\uB2F5 \uC218", `${summary.responseCount}`, summary.periodLabel);
+    this.renderStatCard(
+      stats,
+      "\uC751\uB2F5 \uC218",
+      `${summary.responseCount}`,
+      this.buildResponseCountDescription(summary)
+    );
     this.renderStatCard(
       stats,
       "\uD3C9\uADE0 \uC815\uB2F5",
@@ -1002,7 +1021,8 @@ var ClassPageView = class extends import_obsidian2.ItemView {
     return [
       sourceState.data.classroom,
       sourceState.data.periodLabel,
-      `${sourceState.data.responseCount}\uAC74 \uC751\uB2F5`
+      `${sourceState.data.responseCount}\uAC74 \uBC18\uC601`,
+      sourceState.data.excludedResponseCount > 0 ? `\uC81C\uC678 ${sourceState.data.excludedResponseCount}\uAC74` : ""
     ].filter(Boolean).join(" \xB7 ");
   }
   buildLessonSectionDescription(sourceState) {
@@ -1013,8 +1033,15 @@ var ClassPageView = class extends import_obsidian2.ItemView {
       sourceState.data.classroom,
       sourceState.data.subject,
       sourceState.data.periodLabel,
-      `${sourceState.data.responseCount}\uAC74 \uC751\uB2F5`
+      `${sourceState.data.responseCount}\uAC74 \uBC18\uC601`,
+      sourceState.data.excludedResponseCount > 0 ? `\uC81C\uC678 ${sourceState.data.excludedResponseCount}\uAC74` : ""
     ].filter(Boolean).join(" \xB7 ");
+  }
+  buildResponseCountDescription(summary) {
+    if (summary.excludedResponseCount > 0) {
+      return `${summary.periodLabel} / \uC81C\uC678 ${summary.excludedResponseCount}\uAC74`;
+    }
+    return `${summary.periodLabel} / \uD5C8\uAC00 \uD559\uC0DD \uAE30\uC900`;
   }
   getSourceStatusLabel(status) {
     switch (status) {
