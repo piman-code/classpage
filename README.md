@@ -32,6 +32,7 @@
 자세한 구조 설명은 [docs/OPERATING_MODEL.md](/Users/hangbokee/classpage/docs/OPERATING_MODEL.md) 에 정리했습니다.
 집계 자동화 구조는 [docs/AUTOMATION_LAYER.md](/Users/hangbokee/classpage/docs/AUTOMATION_LAYER.md) 에 정리했습니다.
 처음 설치하고 직접 따라 할 때는 [docs/BEGINNER_SETUP.md](/Users/hangbokee/classpage/docs/BEGINNER_SETUP.md) 부터 보는 것을 권장합니다.
+Drive 자동 갱신 + Mac 자동 복사 운영은 [docs/DRIVE_SYNC_SETUP.md](/Users/hangbokee/classpage/docs/DRIVE_SYNC_SETUP.md) 에 정리했습니다.
 
 ## 데이터 흐름
 

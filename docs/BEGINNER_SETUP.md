@@ -778,3 +778,5 @@ Apps Script는 정상인데 classpage에서 안 보이면 여기입니다.
 5. 마지막에 JSON 파일을 볼트에 넣고 classpage에서 확인합니다.
 
 이 순서가 좋은 이유는 문제가 생겼을 때 어디가 잘못되었는지 범위를 줄이기 쉽기 때문입니다.
+
+수동 복사까지 성공한 뒤 Drive 자동 갱신 + Mac 자동 복사 방식으로 넘어가려면 [docs/DRIVE_SYNC_SETUP.md](/Users/hangbokee/classpage/docs/DRIVE_SYNC_SETUP.md) 를 이어서 보면 됩니다.

@@ -159,6 +159,8 @@ Apps Script는 두 가지 방식으로 결과를 제공합니다.
 첫 단계는 `installRefreshTrigger()`로 15분 간격 시간 트리거를 거는 방식을 추천합니다.  
 폼 제출 즉시 트리거보다 덜 예민하고, 디버깅도 쉽습니다.
 
+Drive 자동 갱신 후 Mac에서 Obsidian 볼트로 자동 복사하는 운영 방식은 [docs/DRIVE_SYNC_SETUP.md](/Users/hangbokee/classpage/docs/DRIVE_SYNC_SETUP.md) 에 정리했습니다.
+
 ## 5. 운영자가 수정할 수 있는 규칙/설정 포인트
 
 운영자가 가장 자주 바꿀 곳은 [automation/apps-script/Config.gs](/Users/hangbokee/classpage/automation/apps-script/Config.gs) 입니다.
