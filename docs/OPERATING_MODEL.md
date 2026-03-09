@@ -1,0 +1,173 @@
+# classpage 운영 구조
+
+처음 세팅을 직접 따라 해야 한다면 [docs/BEGINNER_SETUP.md](/Users/hangbokee/classpage/docs/BEGINNER_SETUP.md)를 먼저 보고,  
+이 문서는 구조와 책임 분리를 이해하는 용도로 보는 것을 권장합니다.
+
+## 1. 전체 구조 요약
+
+`classpage`는 네 개의 층으로 나눠 생각하면 가장 이해하기 쉽습니다.
+
+1. 학생용 페이지
+   학생이 보는 화면입니다. 오늘의 할 일, 공지사항, Google Form 버튼만 담당합니다.
+2. 교사용 페이지
+   교사가 보는 화면입니다. 이미 계산된 요약 결과만 빠르게 확인합니다.
+3. 집계 레이어
+   Google Sheets / Apps Script / 외부 자동화가 학생 응답을 요약 JSON으로 변환합니다.
+4. 표시 레이어
+   classpage가 JSON 파일을 읽어 요약 카드와 목록으로 보여줍니다.
+
+핵심 원칙은 다음과 같습니다.
+
+- 수집은 Google Form
+- 원본 저장은 Google Sheets
+- 계산은 Apps Script 또는 외부 자동화
+- 표시는 classpage
+
+## 2. 데이터 흐름 설명
+
+### 학급용 폼
+
+1. 학생이 학급용 Google Form을 제출합니다.
+2. 응답이 Google Sheets에 쌓입니다.
+3. Apps Script가 정서 상태, 목표 달성 정도, 도움이 필요한 학생, 칭찬 후보를 계산합니다.
+4. 결과를 `class-summary.json`으로 만듭니다.
+5. JSON 파일이 Obsidian 볼트의 `classpage-data/class-summary.json`에 들어오면 classpage가 표시합니다.
+
+### 수업용 폼
+
+1. 학생이 수업용 Google Form을 제출합니다.
+2. 응답이 Google Sheets에 쌓입니다.
+3. Apps Script가 어려워한 개념, 정오답 현황, 과제 수행 정도, 보충 지도 필요 학생을 계산합니다.
+4. 결과를 `lesson-summary.json`으로 만듭니다.
+5. JSON 파일이 Obsidian 볼트의 `classpage-data/lesson-summary.json`에 들어오면 classpage가 표시합니다.
+
+## 3. 학생용 페이지 구조
+
+학생용 페이지는 정적 설정 화면입니다.
+
+- 상단 제목 / 설명 / 상태 문구
+- 오늘의 할 일
+- 공지사항
+- 학급용 Google Form 버튼
+- 수업용 Google Form 버튼
+
+여기에는 학생 응답 데이터가 직접 들어오지 않습니다.
+
+## 4. 교사용 페이지 구조
+
+교사용 페이지는 집계 결과 화면입니다.
+
+- 집계 연결 상태
+  어느 JSON 경로를 읽는지, 파일이 있는지, 언제 집계됐는지 확인
+- 학급용 폼 집계
+  정서 상태, 목표 달성 분포, 도움이 필요한 학생, 칭찬/격려 후보
+- 수업용 폼 집계
+  어려워한 개념, 과제 수행 분포, 보충 지도 필요 학생, 학생별 정오답/과제 현황
+
+교사용 페이지는 원문 응답을 직접 나열하지 않고, 판단에 필요한 요약 중심으로 구성합니다.
+
+## 5. 집계 레이어에서 계산할 항목
+
+### 학급용 폼 집계
+
+- 정서 상태 분포
+- 어제 할 일 달성도 분포
+- 도움이 필요한 학생 목록
+- 칭찬/격려 후보 학생 목록
+
+### 수업용 폼 집계
+
+- 어려워한 개념 목록
+- 평균 정답 / 평균 오답
+- 과제 수행 분포
+- 보충 지도가 필요한 학생 목록
+- 학생별 정오답 및 과제 현황
+
+## 6. classpage에서 표시만 할 항목
+
+classpage는 아래를 계산하지 않고 표시만 합니다.
+
+- 응답 수
+- 정서 상태 분포
+- 목표 달성 분포
+- 어려워한 개념
+- 학생별 정오답
+- 과제 수행 정도
+- 도움이 필요한 학생
+- 칭찬/격려 후보
+
+이 값들은 모두 외부 집계 JSON 결과여야 합니다.
+
+## 7. 설정 포인트 목록
+
+### 정적 설정
+
+`Settings -> classpage`
+
+- 학생용 페이지 제목 / 설명 / 상태 문구
+- 오늘의 할 일 제목 / 내용
+- 공지사항 제목 / 내용
+- 학급용 폼 링크 / 버튼 문구
+- 수업용 폼 링크 / 버튼 문구
+- 교사용 페이지 제목 / 설명 / 상태 문구
+- 학급 집계 JSON 경로
+- 수업 집계 JSON 경로
+
+### 사용자 입력 원본
+
+- Google Form 응답
+- Google Sheets 응답 행
+
+classpage 설정에서 직접 바꾸지 않습니다.
+
+### 집계 결과
+
+- `class-summary.json`
+- `lesson-summary.json`
+
+이 파일 내용을 바꾸면 교사용 화면 내용이 바뀝니다.
+
+## 8. 어디를 수정해야 무엇이 바뀌는가
+
+- 학생용 문구를 바꾸고 싶다
+  `Settings -> classpage` 또는 [src/defaults.ts](/Users/hangbokee/classpage/src/defaults.ts)
+- 학생용 Google Form 링크를 바꾸고 싶다
+  `Settings -> classpage`
+- 교사용 페이지 제목이나 설명을 바꾸고 싶다
+  `Settings -> classpage`
+- 교사용 숫자나 학생 목록이 바뀌게 하고 싶다
+  Google Sheets / Apps Script / JSON 생성 로직
+- 교사용 화면이 읽는 파일 위치를 바꾸고 싶다
+  `Settings -> classpage`의 집계 JSON 경로
+
+## 9. 현재 구현 파일
+
+- [src/main.ts](/Users/hangbokee/classpage/src/main.ts)
+  학생용/교사용 화면과 설정 탭
+- [src/defaults.ts](/Users/hangbokee/classpage/src/defaults.ts)
+  기본 설정값, 집계 계약 정규화
+- [src/types.ts](/Users/hangbokee/classpage/src/types.ts)
+  학생용/교사용/집계 데이터 타입
+- [src/teacher-data.ts](/Users/hangbokee/classpage/src/teacher-data.ts)
+  집계 JSON 로더
+- [automation/apps-script/Config.gs](/Users/hangbokee/classpage/automation/apps-script/Config.gs)
+  Apps Script 집계 규칙과 시트/출력 설정
+- [automation/apps-script/Code.gs](/Users/hangbokee/classpage/automation/apps-script/Code.gs)
+  학급용/수업용 JSON 생성기
+
+## 10. 현재 의도적으로 넣지 않은 기능
+
+- Google Sheets 직접 연동
+- 원문 응답 전체 브라우저
+- 교사용 편집 화면
+- 복잡한 필터와 다중 클래스 관리
+
+## 11. 다음 단계 제안
+
+가장 자연스러운 다음 단계는 다음 셋 중 하나입니다.
+
+1. Apps Script 결과를 Obsidian 볼트 안으로 가져오는 마지막 동기화 단계 붙이기
+2. 교사용 화면에 날짜/반/교시 필터를 얇게 추가하기
+3. 집계 규칙을 실제 운영 기록에 맞게 조금씩 조정하기
+
+첫 단계에서는 수집-집계-표시의 분리를 유지하는 것이 가장 중요합니다.

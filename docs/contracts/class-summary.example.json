@@ -1,0 +1,48 @@
+{
+  "type": "class-summary",
+  "generatedAt": "2026-03-10T07:40:00+09:00",
+  "periodLabel": "2026-03-10 아침",
+  "classroom": "3-2",
+  "responseCount": 24,
+  "source": {
+    "formName": "학급용 Google Form",
+    "formUrl": "https://docs.google.com/forms/d/e/1FAIpQLSeBR_cBQFf_CXo6ytCabIMfvStXn_QPSYadonYLKNR6WAT2bg/viewform?usp=header",
+    "sheetName": "학급용 응답",
+    "aggregatorNote": "Apps Script가 Google Sheets 응답을 읽어 학급 요약 JSON으로 변환"
+  },
+  "emotionSummary": [
+    { "label": "안정", "count": 14, "note": "전반적으로 안정적" },
+    { "label": "피곤함", "count": 6, "note": "아침 집중도 점검 필요" },
+    { "label": "불안", "count": 4, "note": "개별 확인 필요" }
+  ],
+  "goalSummary": [
+    { "label": "달성", "count": 11, "note": "어제 할 일을 대부분 마침" },
+    { "label": "부분 달성", "count": 8, "note": "조금 더 점검 필요" },
+    { "label": "미달", "count": 5, "note": "추가 지원 필요" }
+  ],
+  "supportStudents": [
+    {
+      "student": {
+        "classroom": "3-2",
+        "number": "07",
+        "name": "김하늘"
+      },
+      "mood": "불안",
+      "reason": "발표 순서가 걱정된다고 적음",
+      "goal": "준비물 빠짐없이 챙기기",
+      "yesterdayAchievement": "미달",
+      "teacherNote": "등교 직후 짧게 확인 필요"
+    }
+  ],
+  "praiseCandidates": [
+    {
+      "student": {
+        "classroom": "3-2",
+        "number": "12",
+        "name": "이서준"
+      },
+      "reason": "친구의 준비물 정리를 도와줌",
+      "mentionedPeer": "김하늘"
+    }
+  ]
+}

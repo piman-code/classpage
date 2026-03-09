@@ -1,0 +1,76 @@
+{
+  "type": "lesson-summary",
+  "generatedAt": "2026-03-10T15:55:00+09:00",
+  "periodLabel": "2026-03-10 5교시",
+  "classroom": "3-2",
+  "subject": "과학",
+  "responseCount": 24,
+  "source": {
+    "formName": "수업용 Google Form",
+    "formUrl": "https://docs.google.com/forms/d/e/1FAIpQLSefjZ3vyJs6T5PkkrUQDo2JY1wNh8cHPdeieRWRFVsMzu-_NA/viewform?usp=header",
+    "sheetName": "수업용 응답",
+    "aggregatorNote": "Apps Script가 Google Sheets 응답을 읽어 수업 요약 JSON으로 변환"
+  },
+  "overview": {
+    "averageCorrectCount": 6.8,
+    "averageIncorrectCount": 1.9,
+    "assignmentCompletionLabel": "대체로 완료"
+  },
+  "difficultConcepts": [
+    {
+      "concept": "전류와 전압의 차이",
+      "count": 8,
+      "averageUnderstanding": "이해도 낮음",
+      "note": "개념 1 설명 보강 필요"
+    },
+    {
+      "concept": "직렬 연결 계산",
+      "count": 5,
+      "averageUnderstanding": "보통",
+      "note": "예제 추가 필요"
+    }
+  ],
+  "assignmentSummary": [
+    { "label": "완료", "count": 16, "note": "제출 확인됨" },
+    { "label": "부분 완료", "count": 5, "note": "추가 점검 필요" },
+    { "label": "미완료", "count": 3, "note": "개별 안내 필요" }
+  ],
+  "supportStudents": [
+    {
+      "student": {
+        "classroom": "3-2",
+        "number": "03",
+        "name": "박민준"
+      },
+      "correctCount": 3,
+      "incorrectCount": 5,
+      "misconception": "전압과 전류를 혼동함",
+      "assignmentStatus": "부분 완료",
+      "teacherNote": "다음 시간 시작 전 1:1 확인"
+    }
+  ],
+  "studentResults": [
+    {
+      "student": {
+        "classroom": "3-2",
+        "number": "03",
+        "name": "박민준"
+      },
+      "correctCount": 3,
+      "incorrectCount": 5,
+      "assignmentStatus": "부분 완료",
+      "followUp": "개념 1 재설명 필요"
+    },
+    {
+      "student": {
+        "classroom": "3-2",
+        "number": "12",
+        "name": "이서준"
+      },
+      "correctCount": 8,
+      "incorrectCount": 1,
+      "assignmentStatus": "완료",
+      "followUp": "심화 문제 제공 가능"
+    }
+  ]
+}
