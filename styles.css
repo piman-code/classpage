@@ -207,6 +207,7 @@
   gap: 0.5rem;
   width: 100%;
   min-width: 0;
+  min-height: 158px;
   border: 1px solid var(--background-modifier-border);
   background: var(--background-primary);
   color: var(--text-normal);
@@ -216,6 +217,7 @@
   text-align: left;
   align-content: start;
   cursor: pointer;
+  overflow: hidden;
 }
 
 .classpage-dashboard-card:hover {
@@ -266,6 +268,7 @@
   margin: 0;
   line-height: 1.45;
   overflow-wrap: anywhere;
+  min-width: 0;
 }
 
 .classpage-dashboard-card__meta {
@@ -275,6 +278,7 @@
 .classpage-dashboard-card__hint {
   color: var(--text-muted);
   font-size: 0.9rem;
+  margin-top: 0.1rem;
 }
 
 .classpage-form-card__description,
@@ -575,6 +579,10 @@
   .classpage-dashboard-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+
+  .classpage-dashboard-card {
+    min-height: 172px;
+  }
 }
 
 @media (max-width: 720px) {
@@ -619,5 +627,9 @@
 
   .classpage-drilldown-fields {
     grid-template-columns: 1fr;
+  }
+
+  .classpage-dashboard-card {
+    min-height: 0;
   }
 }

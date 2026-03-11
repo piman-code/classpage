@@ -525,8 +525,11 @@ function validateStarRuleConfig_() {
 
     if (rule.autoCriteria && rule.sources.indexOf("lesson-form") !== -1) {
       if (rule.autoCriteria.assignmentStatusIn.length > 0
-        && !CLASSPAGE_AUTOMATION_CONFIG.sources.lessonForm.headers.assignmentStatus) {
-        issues.push(rule.ruleId + ": assignmentStatus 헤더 없음");
+        && !(
+          CLASSPAGE_AUTOMATION_CONFIG.sources.lessonForm.headers.assignmentStatus
+          || CLASSPAGE_AUTOMATION_CONFIG.sources.lessonForm.headers.reviewPlan
+        )) {
+        issues.push(rule.ruleId + ": assignmentStatus/reviewPlan 헤더 없음");
       }
       if (rule.autoCriteria.minimumCorrectCount !== null
         && !CLASSPAGE_AUTOMATION_CONFIG.sources.lessonForm.headers.correctCount) {
@@ -1089,20 +1092,72 @@ function dedupeLatestByGroupAndStudent_(rows, headers, groupKeyBuilder) {
 }
 
 function analyzeClassRow_(row, sourceConfig, rules) {
+  const mood = getRowValueByHeaderOptions_(row, [
+    sourceConfig.headers.mood,
+    "오늘 아침 기분",
+    "오늘 기분은 어떤가요?",
+  ]);
+  const yesterdayAchievement = getRowValueByHeaderOptions_(row, [
+    sourceConfig.headers.yesterdayAchievement,
+    "어제 할일 달성도",
+    "어제 해야 할 일(숙제, 과제, 자기 할 일 등)은 어느 정도 했나요?",
+  ]);
+  const moodFactors = getRowValueByHeaderOptions_(row, [
+    sourceConfig.headers.moodFactors,
+    "오늘의 기분 상태에 영향을 준 가장 가까운 것은 무엇인가요? (중복 선택 가능)",
+  ]);
+  const physicalCondition = getRowValueByHeaderOptions_(row, [
+    sourceConfig.headers.physicalCondition,
+    "오늘 몸 상태는 어떤가요?",
+  ]);
+  const moodFreeNote = getRowValueByHeaderOptions_(row, [
+    sourceConfig.headers.moodReason,
+    "기분의 이유",
+    "오늘의 기분이나 몸 상태에 대해 자유롭게 적어 주세요. (선택 사항)",
+  ]);
+  const supportNeed = getRowValueByHeaderOptions_(row, [
+    sourceConfig.headers.supportNeed,
+    "오늘 학교생활에서 특별히 선생님의 도움이나 배려가 필요한 부분이 있나요?",
+  ]);
+  const moodReason = [
+    moodFreeNote,
+    moodFactors ? "영향 요인: " + moodFactors : "",
+    physicalCondition ? "몸 상태: " + physicalCondition : "",
+  ].filter(Boolean).join(" / ");
+  const rawTeacherMessage = getRowValueByHeaderOptions_(row, [
+    sourceConfig.headers.teacherMessage,
+    "선생님께 하고 싶은 말",
+    "선생님께 하고 싶은 말이 있다면 자유롭게 적어 주세요. (고민, 부탁, 감사한 일 등, 비워도 괜찮습니다)",
+  ]);
+  const teacherMessage = [
+    rawTeacherMessage,
+    hasMeaningfulSupportNeed_(supportNeed) ? "도움 필요: " + supportNeed : "",
+  ].filter(Boolean).join(" / ");
+  const helpedFriend = getRowValueByHeaderOptions_(row, [
+    sourceConfig.headers.helpedFriend,
+    "최근 도움을 준 친구와 그 이유",
+    "최근 며칠 동안 내가 친구에게 '도움'을 준 경험이 있다면 적어 주세요. (없으면 '없음'이라고 적어주세요)",
+  ]);
+  const helpedByFriend = getRowValueByHeaderOptions_(row, [
+    sourceConfig.headers.helpedByFriend,
+    "최근 도움 받은 친구와 그 이유",
+    "최근 며칠 동안 내가 친구로부터 '도움'을 받은 경험이 있다면 적어 주세요. (없으면 '없음'이라고 적어주세요)",
+  ]);
+  const goal = getRowValueByHeaderOptions_(row, [
+    sourceConfig.headers.goal,
+    "오늘의 목표",
+    "오늘 하루, 꼭 이루고 싶은 목표를 한 가지 적어 주세요.",
+  ]);
   const moodLabel = classifyBucketLabel_(
-    getRowValue_(row, sourceConfig.headers.mood),
+    mood,
     rules.emotionBuckets,
     "미분류",
   );
   const achievementLabel = classifyBucketLabel_(
-    getRowValue_(row, sourceConfig.headers.yesterdayAchievement),
+    yesterdayAchievement,
     rules.goalBuckets,
     "미분류",
   );
-  const moodReason = getRowValue_(row, sourceConfig.headers.moodReason);
-  const teacherMessage = getRowValue_(row, sourceConfig.headers.teacherMessage);
-  const helpedFriend = getRowValue_(row, sourceConfig.headers.helpedFriend);
-  const helpedByFriend = getRowValue_(row, sourceConfig.headers.helpedByFriend);
   const notes = [];
   let score = 0;
 
@@ -1119,9 +1174,14 @@ function analyzeClassRow_(row, sourceConfig, rules) {
     notes.push("어제 할 일 부분 달성");
   }
 
-  if (containsAnyKeyword_(moodReason + " " + teacherMessage, rules.helpKeywords)) {
+  if (containsAnyKeyword_([moodFreeNote, moodFactors, rawTeacherMessage].join(" "), rules.helpKeywords)) {
     score += 1;
     notes.push("도움 요청성 문구");
+  }
+
+  if (hasMeaningfulSupportNeed_(supportNeed)) {
+    score += 1;
+    notes.push("도움/배려 요청");
   }
 
   if (normalizeText_(helpedByFriend)) {
@@ -1133,11 +1193,11 @@ function analyzeClassRow_(row, sourceConfig, rules) {
     return {
       response: {
         student: buildStudentReference_(row, sourceConfig.headers),
-        mood: getRowValue_(row, sourceConfig.headers.mood),
+        mood: mood,
         emotionLabel: moodLabel,
         moodReason: moodReason,
-        goal: getRowValue_(row, sourceConfig.headers.goal),
-        yesterdayAchievement: getRowValue_(row, sourceConfig.headers.yesterdayAchievement),
+        goal: goal,
+        yesterdayAchievement: yesterdayAchievement,
         goalLabel: achievementLabel,
         teacherMessage: teacherMessage,
         helpedFriend: helpedFriend,
@@ -1151,11 +1211,11 @@ function analyzeClassRow_(row, sourceConfig, rules) {
 
   const response = {
     student: buildStudentReference_(row, sourceConfig.headers),
-    mood: getRowValue_(row, sourceConfig.headers.mood),
+    mood: mood,
     emotionLabel: moodLabel,
     moodReason: moodReason,
-    goal: getRowValue_(row, sourceConfig.headers.goal),
-    yesterdayAchievement: getRowValue_(row, sourceConfig.headers.yesterdayAchievement),
+    goal: goal,
+    yesterdayAchievement: yesterdayAchievement,
     goalLabel: achievementLabel,
     teacherMessage: teacherMessage,
     helpedFriend: helpedFriend,
@@ -1178,7 +1238,11 @@ function analyzeClassRow_(row, sourceConfig, rules) {
 }
 
 function buildPraiseCandidate_(row, sourceConfig, rules) {
-  const helpedFriend = getRowValue_(row, sourceConfig.headers.helpedFriend);
+  const helpedFriend = getRowValueByHeaderOptions_(row, [
+    sourceConfig.headers.helpedFriend,
+    "최근 도움을 준 친구와 그 이유",
+    "최근 며칠 동안 내가 친구에게 '도움'을 준 경험이 있다면 적어 주세요. (없으면 '없음'이라고 적어주세요)",
+  ]);
   if (normalizeText_(helpedFriend).length < rules.praiseMinLength) {
     return null;
   }
@@ -1191,13 +1255,41 @@ function buildPraiseCandidate_(row, sourceConfig, rules) {
 }
 
 function analyzeLessonRow_(row, headers, rules) {
-  const correctCount = toNumber_(getRowValue_(row, headers.correctCount));
-  const incorrectCount = toNumber_(getRowValue_(row, headers.incorrectCount));
-  const incorrectReason = getRowValue_(row, headers.incorrectReason);
-  const teacherMessage = getRowValue_(row, headers.teacherMessage);
-  const lessonUnit = getRowValue_(row, headers.lessonUnit);
+  const correctCount = toNumber_(getRowValueByHeaderOptions_(row, [
+    headers.correctCount,
+    "문제 맞은 개수",
+    "오늘 수업 관련 활동/문제 풀이에서 맞은 문제 수",
+  ]));
+  const incorrectCount = toNumber_(getRowValueByHeaderOptions_(row, [
+    headers.incorrectCount,
+    "틀린 개수",
+    "오늘 수업 관련 활동/문제 풀이에서 틀린 문제 수",
+  ]));
+  const incorrectReason = getRowValueByHeaderOptions_(row, [
+    headers.incorrectReason,
+    "틀린 이유",
+    "틀린 문제가 있다면, 틀린 이유는 무엇에 가장 가깝다고 생각하나요? (복수 선택 가능)",
+  ]);
+  const reteachRequest = getRowValueByHeaderOptions_(row, [
+    headers.reteachRequest,
+    "다음 시간 수업 전에 선생님께 다시 설명 요청하거나, 다시 보고 싶은 내용이 있나요?",
+  ]);
+  const rawTeacherMessage = getRowValueByHeaderOptions_(row, [
+    headers.teacherMessage,
+    "선생님께 하고 싶은 말",
+    "선생님께 하고 싶은 말 (수업 피드백, 질문, 건의사항, 오늘 느낀 점 등 자유롭게 작성해 주세요.)",
+  ]);
+  const teacherMessage = [
+    rawTeacherMessage,
+    reteachRequest ? "다시 설명 요청: " + reteachRequest : "",
+  ].filter(Boolean).join(" / ");
+  const lessonUnit = getRowValueByHeaderOptions_(row, [
+    headers.lessonUnit,
+    "오늘 배운 단원",
+    "오늘 배운 단원/주제",
+  ]);
   const assignmentLabel = classifyBucketLabel_(
-    getRowValue_(row, headers.assignmentStatus),
+    getLessonAssignmentSourceValue_(row, headers),
     rules.assignmentBuckets,
     "미분류",
   );
@@ -1206,16 +1298,7 @@ function analyzeLessonRow_(row, headers, rules) {
   const notes = [];
   let score = 0;
 
-  [
-    {
-      concept: getRowValue_(row, headers.concept1),
-      understanding: getRowValue_(row, headers.concept1Understanding),
-    },
-    {
-      concept: getRowValue_(row, headers.concept2),
-      understanding: getRowValue_(row, headers.concept2Understanding),
-    },
-  ].forEach(function (entry) {
+  buildLessonConceptResponseEntries_(row, headers).forEach(function (entry) {
     const understandingLabel = scoreToUnderstandingLabel_(
       classifyUnderstandingScore_(entry.understanding, rules.understandingBuckets),
       rules.understandingBuckets,
@@ -1314,16 +1397,7 @@ function buildConceptStats_(rows, headers, rules) {
   const stats = {};
 
   rows.forEach(function (row) {
-    [
-      {
-        concept: getRowValue_(row, headers.concept1),
-        understanding: getRowValue_(row, headers.concept1Understanding),
-      },
-      {
-        concept: getRowValue_(row, headers.concept2),
-        understanding: getRowValue_(row, headers.concept2Understanding),
-      },
-    ].forEach(function (entry) {
+    buildLessonConceptStatEntries_(row, headers).forEach(function (entry) {
       const concept = normalizeText_(entry.concept);
       if (!concept) {
         return;
@@ -1400,8 +1474,15 @@ function buildAssignmentCompletionLabel_(assignmentSummary) {
 function buildLessonGroupKey_(row, headers) {
   const dateLabel = getExplicitDateLabel_(row, headers.date)
     || formatDateOnly_(getRowDate_(row, headers.timestamp));
-  const period = getRowValue_(row, headers.period);
-  const subject = getRowValue_(row, headers.subject);
+  const period = getRowValueByHeaderOptions_(row, [
+    headers.period,
+    "교시",
+    "오늘 수업한 교시",
+  ]);
+  const subject = getRowValueByHeaderOptions_(row, [
+    headers.subject,
+    "과목",
+  ]);
   return [dateLabel, period, subject].join("|");
 }
 
@@ -1412,8 +1493,16 @@ function buildClassDateGroupKey_(row, timestampHeader) {
 function buildLessonPeriodLabel_(row, headers) {
   const dateLabel = getExplicitDateLabel_(row, headers.date)
     || formatDateOnly_(getRowDate_(row, headers.timestamp));
-  const period = getRowValue_(row, headers.period);
-  const lessonUnit = getRowValue_(row, headers.lessonUnit);
+  const period = getRowValueByHeaderOptions_(row, [
+    headers.period,
+    "교시",
+    "오늘 수업한 교시",
+  ]);
+  const lessonUnit = getRowValueByHeaderOptions_(row, [
+    headers.lessonUnit,
+    "오늘 배운 단원",
+    "오늘 배운 단원/주제",
+  ]);
   return [dateLabel, period, lessonUnit].filter(Boolean).join(" / ");
 }
 
@@ -1658,12 +1747,13 @@ function matchesAutomaticStarRule_(row, headers, rule, source) {
   }
 
   if (criteria.assignmentStatusIn.length > 0) {
-    if (!headers.assignmentStatus) {
+    const assignmentSourceValue = getLessonAssignmentSourceValue_(row, headers);
+    if (!assignmentSourceValue) {
       return false;
     }
 
     const assignmentLabel = classifyBucketLabel_(
-      getRowValue_(row, headers.assignmentStatus),
+      assignmentSourceValue,
       CLASSPAGE_AUTOMATION_CONFIG.rules.lessonSummary.assignmentBuckets,
       "미분류",
     );
@@ -1951,6 +2041,147 @@ function getRowValue_(row, headerName) {
   }
 
   return String(value == null ? "" : value).trim();
+}
+
+function getRowValueByHeaderOptions_(row, headerNames) {
+  for (let index = 0; index < (headerNames || []).length; index += 1) {
+    const headerName = String(headerNames[index] || "").trim();
+    if (!headerName) {
+      continue;
+    }
+
+    if (Object.prototype.hasOwnProperty.call(row, headerName)) {
+      return getRowValue_(row, headerName);
+    }
+  }
+
+  return "";
+}
+
+function hasMeaningfulSupportNeed_(value) {
+  const normalized = normalizeText_(value);
+  return !!normalized && normalized.indexOf("아니요") === -1 && normalized.indexOf("괜찮") === -1;
+}
+
+function getLessonAssignmentSourceValue_(row, headers) {
+  return getRowValueByHeaderOptions_(row, [
+    headers.assignmentStatus,
+    "과제 수행 정도",
+    headers.reviewPlan,
+    "오늘 배운 내용을 복습했나요? 또는 복습할 계획은 어떻게 되나요?",
+  ]);
+}
+
+function buildLessonConceptResponseEntries_(row, headers) {
+  const legacyEntries = [
+    {
+      concept: getRowValueByHeaderOptions_(row, [headers.concept1, "개념 1"]),
+      understanding: getRowValueByHeaderOptions_(row, [headers.concept1Understanding, "개념1 이해 정도"]),
+    },
+    {
+      concept: getRowValueByHeaderOptions_(row, [headers.concept2, "개념 2"]),
+      understanding: getRowValueByHeaderOptions_(row, [headers.concept2Understanding, "개념2 이해 정도"]),
+    },
+  ].filter(function (entry) {
+    return entry.concept || entry.understanding;
+  });
+
+  if (legacyEntries.length > 0) {
+    return legacyEntries;
+  }
+
+  const overallUnderstanding = getRowValueByHeaderOptions_(row, [
+    headers.overallUnderstanding,
+    "오늘 수업에 대한 전체 이해도는 어땠나요?",
+  ]);
+  const normalizedOverallUnderstanding = normalizeDerivedUnderstanding_(overallUnderstanding);
+  const hardestPart = getRowValueByHeaderOptions_(row, [
+    headers.hardestPart,
+    "오늘 수업 중 가장 어려웠던 부분 (이해가 잘 안 되었던 부분)은 무엇인가요?",
+  ]);
+  const bestUnderstoodPart = getRowValueByHeaderOptions_(row, [
+    headers.bestUnderstoodPart,
+    "오늘 수업 중 가장 잘 이해했다고 생각하는 부분은 무엇인가요?",
+  ]);
+  const entries = [];
+
+  if (normalizeText_(hardestPart) && normalizeText_(hardestPart) !== "없음") {
+    entries.push({
+      concept: hardestPart,
+      understanding: normalizedOverallUnderstanding || "보통",
+    });
+  }
+
+  if (normalizeText_(bestUnderstoodPart) && normalizeText_(bestUnderstoodPart) !== "없음") {
+    entries.push({
+      concept: bestUnderstoodPart,
+      understanding: "높음",
+    });
+  }
+
+  return entries;
+}
+
+function buildLessonConceptStatEntries_(row, headers) {
+  const legacyEntries = [
+    {
+      concept: getRowValueByHeaderOptions_(row, [headers.concept1, "개념 1"]),
+      understanding: getRowValueByHeaderOptions_(row, [headers.concept1Understanding, "개념1 이해 정도"]),
+    },
+    {
+      concept: getRowValueByHeaderOptions_(row, [headers.concept2, "개념 2"]),
+      understanding: getRowValueByHeaderOptions_(row, [headers.concept2Understanding, "개념2 이해 정도"]),
+    },
+  ].filter(function (entry) {
+    return entry.concept || entry.understanding;
+  });
+
+  if (legacyEntries.length > 0) {
+    return legacyEntries;
+  }
+
+  const overallUnderstanding = getRowValueByHeaderOptions_(row, [
+    headers.overallUnderstanding,
+    "오늘 수업에 대한 전체 이해도는 어땠나요?",
+  ]);
+  const normalizedOverallUnderstanding = normalizeDerivedUnderstanding_(overallUnderstanding);
+  const hardestPart = getRowValueByHeaderOptions_(row, [
+    headers.hardestPart,
+    "오늘 수업 중 가장 어려웠던 부분 (이해가 잘 안 되었던 부분)은 무엇인가요?",
+  ]);
+
+  if (!normalizeText_(hardestPart) || normalizeText_(hardestPart) === "없음") {
+    return [];
+  }
+
+  return [
+    {
+      concept: hardestPart,
+      understanding: normalizedOverallUnderstanding || "보통",
+    },
+  ];
+}
+
+function normalizeDerivedUnderstanding_(value) {
+  const normalized = normalizeText_(value);
+
+  if (!normalized) {
+    return "";
+  }
+
+  if (normalized.indexOf("5") !== -1 || normalized.indexOf("4") !== -1) {
+    return "높음";
+  }
+
+  if (normalized.indexOf("3") !== -1) {
+    return "보통";
+  }
+
+  if (normalized.indexOf("2") !== -1 || normalized.indexOf("1") !== -1) {
+    return "낮음";
+  }
+
+  return String(value || "").trim();
 }
 
 function parseDateValue_(value) {

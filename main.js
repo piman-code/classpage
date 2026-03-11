@@ -1000,9 +1000,13 @@ var ClassPageView = class extends import_obsidian2.ItemView {
     );
   }
   renderTeacherStatusCard(parent, mode, title, sourceState) {
-    const button = parent.createEl("button", {
+    const button = parent.createDiv({
       cls: "classpage-card classpage-dashboard-card",
-      attr: { type: "button" }
+      attr: {
+        role: "button",
+        tabindex: "0",
+        "aria-pressed": this.teacherFocusMode === mode ? "true" : "false"
+      }
     });
     if (this.teacherFocusMode === mode) {
       button.addClass("is-active");
@@ -1028,14 +1032,22 @@ var ClassPageView = class extends import_obsidian2.ItemView {
       cls: "classpage-dashboard-card__hint",
       text: this.getTeacherStatusHint(mode, sourceState)
     });
-    button.addEventListener("click", () => {
+    const toggleMode = () => {
       if (this.teacherFocusMode === mode) {
         this.teacherFocusMode = "overview";
         this.render();
+      } else {
+        this.teacherFocusMode = mode;
+        this.render();
+      }
+    };
+    button.addEventListener("click", toggleMode);
+    button.addEventListener("keydown", (event) => {
+      if (event.key !== "Enter" && event.key !== " ") {
         return;
       }
-      this.teacherFocusMode = mode;
-      this.render();
+      event.preventDefault();
+      toggleMode();
     });
   }
   renderTeacherAdvancedSection(parent, teacherData) {
