@@ -48,8 +48,8 @@
 | arrival | 등교 | attendance | +5 | student | class-form | true | 학급용 폼 제출 시 자동 적립 |
 | attendance-check | 출석체크 | attendance | +1 | student | class-form | true | 학급용 폼 제출 완료 |
 | lesson-submit | 수업 제출 | participation | +1 | student | lesson-form | true | 수업용 폼 제출 완료 |
-| assignment-complete | 과제 완료 | participation | +1 | student | lesson-form | true | 수업용 폼의 과제 수행 정도가 완료로 분류되면 자동 적립 |
-| no-incorrect | 오답 없음 | participation | +1 | student | lesson-form | true | 수업용 폼에서 과제 완료이고 오답이 없으면 자동 적립 |
+| assignment-complete | 복습/수행 완료 | participation | +1 | student | lesson-form | true | 수업용 폼의 복습/수행 상태가 완료로 분류되면 자동 적립 |
+| no-incorrect | 오답 없음 | participation | +1 | student | lesson-form | true | 수업용 폼에서 복습/수행 상태가 완료이고 오답이 없으면 자동 적립 |
 | manual-praise | 수동 칭찬 | service | +2 | student | manual | true | 교사가 공개 가점을 수동으로 부여 |
 | teacher-adjustment | 교사 전용 조정 | adjustment | -2 | teacher | manual | true | 필요할 때만 교사 내부 조정 |
 
@@ -191,14 +191,14 @@ interface StarModeLedger {
 1. 학급용 출석체크 제출: `+1`
 2. 등교 확인(학급용 폼 제출 시): `+5`
 3. 수업용 폼 제출: `+1`
-4. 수업용 과제 완료: `+1`
-5. 수업용 과제 완료 + 오답 없음: `+1`
+4. 수업용 복습/수행 완료: `+1`
+5. 수업용 복습/수행 완료 + 오답 없음: `+1`
 
 주의:
 
 - `등교 +5`와 `출석체크 +1`은 같은 이벤트로 묶지 말고 별도 규칙으로 남기는 편이 좋습니다.
 - 그래야 나중에 운영자가 한쪽만 끄거나 점수만 바꾸기 쉽습니다.
-- 자동 적립은 `과제 수행 정도`, `문제 맞은 개수`, `틀린 개수` 같은 구조화 입력만 사용합니다.
+- 자동 적립은 `복습 계획에서 정규화한 복습/수행 상태`, `문제 맞은 개수`, `틀린 개수` 같은 구조화 입력만 사용합니다.
 - `도움을 준 친구`, `선생님께 하고 싶은 말` 같은 자유서술 문장은 자동 적립 조건으로 쓰지 않습니다.
 - 학생 식별이 안 되거나 시각/수업 그룹을 만들 수 없으면 자동 적립 이벤트를 만들지 않습니다.
 - 자동 적립은 응답 원본을 다시 읽어 매번 재계산하므로, `refreshAllSummaries()`를 다시 실행해도 같은 응답이 누적 저장되는 구조가 아닙니다.

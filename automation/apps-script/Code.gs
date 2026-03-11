@@ -2065,10 +2065,10 @@ function hasMeaningfulSupportNeed_(value) {
 
 function getLessonAssignmentSourceValue_(row, headers) {
   return getRowValueByHeaderOptions_(row, [
-    headers.assignmentStatus,
-    "과제 수행 정도",
     headers.reviewPlan,
     "오늘 배운 내용을 복습했나요? 또는 복습할 계획은 어떻게 되나요?",
+    headers.assignmentStatus,
+    "과제 수행 정도",
   ]);
 }
 

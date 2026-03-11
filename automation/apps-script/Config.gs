@@ -47,10 +47,6 @@ const CLASSPAGE_AUTOMATION_CONFIG = {
         date: "날짜",
         period: "오늘 수업한 교시",
         lessonUnit: "오늘 배운 단원/주제",
-        concept1: "개념 1",
-        concept1Understanding: "개념1 이해 정도",
-        concept2: "개념 2",
-        concept2Understanding: "개념2 이해 정도",
         overallUnderstanding: "오늘 수업에 대한 전체 이해도는 어땠나요?",
         hardestPart: "오늘 수업 중 가장 어려웠던 부분 (이해가 잘 안 되었던 부분)은 무엇인가요?",
         bestUnderstoodPart: "오늘 수업 중 가장 잘 이해했다고 생각하는 부분은 무엇인가요?",
@@ -62,7 +58,6 @@ const CLASSPAGE_AUTOMATION_CONFIG = {
         reviewPlan: "오늘 배운 내용을 복습했나요? 또는 복습할 계획은 어떻게 되나요?",
         reteachRequest: "다음 시간 수업 전에 선생님께 다시 설명 요청하거나, 다시 보고 싶은 내용이 있나요?",
         teacherMessage: "선생님께 하고 싶은 말 (수업 피드백, 질문, 건의사항, 오늘 느낀 점 등 자유롭게 작성해 주세요.)",
-        assignmentStatus: "과제 수행 정도",
       },
     },
     allowlist: {
@@ -249,7 +244,7 @@ const CLASSPAGE_AUTOMATION_CONFIG = {
         },
         {
           ruleId: "assignment-complete",
-          label: "과제 완료",
+          label: "복습/수행 완료",
           category: "participation",
           delta: 1,
           visibility: "student",
@@ -261,7 +256,7 @@ const CLASSPAGE_AUTOMATION_CONFIG = {
             minimumCorrectCount: null,
             maximumIncorrectCount: null,
           },
-          description: "수업용 폼의 과제 수행 정도가 완료로 분류되면 자동 적립",
+          description: "수업용 폼의 복습/수행 상태가 완료로 분류되면 자동 적립",
         },
         {
           ruleId: "no-incorrect",
@@ -277,7 +272,7 @@ const CLASSPAGE_AUTOMATION_CONFIG = {
             minimumCorrectCount: 1,
             maximumIncorrectCount: 0,
           },
-          description: "수업용 폼에서 과제 완료이고 오답이 없으면 자동 적립",
+          description: "수업용 폼에서 복습/수행 상태가 완료이고 오답이 없으면 자동 적립",
         },
         {
           ruleId: "manual-praise",

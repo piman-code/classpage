@@ -22,7 +22,7 @@
       "concept": "전류와 전압의 차이",
       "count": 8,
       "averageUnderstanding": "이해도 낮음",
-      "note": "개념 1 설명 보강 필요"
+      "note": "어려웠던 부분 응답이 많아 재설명 필요"
     },
     {
       "concept": "직렬 연결 계산",
@@ -60,7 +60,7 @@
       "correctCount": 3,
       "incorrectCount": 5,
       "assignmentStatus": "부분 완료",
-      "followUp": "개념 1 재설명 필요"
+      "followUp": "보충 설명 필요"
     },
     {
       "student": {
@@ -71,7 +71,7 @@
       "correctCount": 8,
       "incorrectCount": 1,
       "assignmentStatus": "완료",
-      "followUp": "심화 문제 제공 가능"
+      "followUp": "심화 가능"
     }
   ],
   "studentResponses": [
@@ -88,18 +88,18 @@
       "incorrectReason": "전압과 전류를 같은 뜻으로 적음",
       "teacherMessage": "직렬 연결 계산이 아직 헷갈립니다.",
       "misconception": "전압과 전류를 혼동함",
-      "followUp": "개념 1 재설명 필요",
+      "followUp": "보충 설명 필요",
       "teacherNote": "자동 분석 메모 예시",
       "concepts": [
         {
           "concept": "전류와 전압의 차이",
-          "understanding": "1",
+          "understanding": "낮음",
           "understandingLabel": "낮음"
         },
         {
           "concept": "직렬 연결 계산",
-          "understanding": "2",
-          "understandingLabel": "보통"
+          "understanding": "높음",
+          "understandingLabel": "높음"
         }
       ]
     },
@@ -116,18 +116,13 @@
       "incorrectReason": "직렬 연결 공식에서 한 문제 실수",
       "teacherMessage": "직렬 연결 계산은 거의 이해했습니다.",
       "misconception": "직렬 연결 계산",
-      "followUp": "심화 문제 제공 가능",
+      "followUp": "심화 가능",
       "teacherNote": "자동 분석 메모 예시",
       "concepts": [
         {
-          "concept": "전류와 전압의 차이",
-          "understanding": "3",
-          "understandingLabel": "높음"
-        },
-        {
           "concept": "직렬 연결 계산",
-          "understanding": "2",
-          "understandingLabel": "보통"
+          "understanding": "높음",
+          "understandingLabel": "높음"
         }
       ]
     }

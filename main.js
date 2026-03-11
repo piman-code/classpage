@@ -68,11 +68,11 @@ var DEFAULT_STAR_RULES = [
   },
   {
     ruleId: "assignment-complete",
-    label: "\uACFC\uC81C \uC644\uB8CC",
+    label: "\uBCF5\uC2B5/\uC218\uD589 \uC644\uB8CC",
     category: "participation",
     delta: 1,
     visibility: "student",
-    description: "\uC218\uC5C5\uC6A9 \uD3FC\uC758 \uACFC\uC81C \uC218\uD589 \uC815\uB3C4\uAC00 \uC644\uB8CC\uB85C \uBD84\uB958\uB418\uBA74 \uC790\uB3D9 \uC801\uB9BD",
+    description: "\uC218\uC5C5\uC6A9 \uD3FC\uC758 \uBCF5\uC2B5/\uC218\uD589 \uC0C1\uD0DC\uAC00 \uC644\uB8CC\uB85C \uBD84\uB958\uB418\uBA74 \uC790\uB3D9 \uC801\uB9BD",
     enabled: true,
     sources: ["lesson-form"],
     allowCustomDelta: false,
@@ -88,7 +88,7 @@ var DEFAULT_STAR_RULES = [
     category: "participation",
     delta: 1,
     visibility: "student",
-    description: "\uC218\uC5C5\uC6A9 \uD3FC\uC5D0\uC11C \uACFC\uC81C \uC644\uB8CC\uC774\uACE0 \uC624\uB2F5\uC774 \uC5C6\uC73C\uBA74 \uC790\uB3D9 \uC801\uB9BD",
+    description: "\uC218\uC5C5\uC6A9 \uD3FC\uC5D0\uC11C \uBCF5\uC2B5/\uC218\uD589 \uC0C1\uD0DC\uAC00 \uC644\uB8CC\uC774\uACE0 \uC624\uB2F5\uC774 \uC5C6\uC73C\uBA74 \uC790\uB3D9 \uC801\uB9BD",
     enabled: true,
     sources: ["lesson-form"],
     allowCustomDelta: false,
@@ -1317,7 +1317,7 @@ var ClassPageView = class extends import_obsidian2.ItemView {
     );
     this.renderStatCard(
       stats,
-      "\uACFC\uC81C \uC218\uD589",
+      "\uBCF5\uC2B5/\uC218\uD589",
       summary.overview.assignmentCompletionLabel || "\uBBF8\uBD84\uB958",
       "\uC9D1\uACC4 \uB808\uC774\uC5B4 \uACB0\uACFC"
     );
@@ -1337,15 +1337,15 @@ var ClassPageView = class extends import_obsidian2.ItemView {
     );
     this.renderGroupedDrilldownCard(
       grid,
-      "\uACFC\uC81C \uC218\uD589 \uBD84\uD3EC",
+      "\uBCF5\uC2B5/\uC218\uD589 \uBD84\uD3EC",
       summary.assignmentSummary.map((item) => ({
         title: item.label,
         meta: `${item.count}\uBA85`,
-        description: item.note || "\uACFC\uC81C \uC218\uD589 \uC0C1\uD0DC",
-        emptyMessage: hasStudentSnapshots ? "\uD574\uB2F9 \uACFC\uC81C \uC218\uD589 \uD559\uC0DD\uC774 \uC5C6\uC2B5\uB2C8\uB2E4." : "\uD559\uC0DD\uBCC4 \uC751\uB2F5 \uC2A4\uB0C5\uC0F7\uC774 \uC5C6\uC5B4 drill-down\uC744 \uC5F4 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.",
+        description: item.note || "\uBCF5\uC2B5/\uC218\uD589 \uC0C1\uD0DC",
+        emptyMessage: hasStudentSnapshots ? "\uD574\uB2F9 \uBCF5\uC2B5/\uC218\uD589 \uC0C1\uD0DC \uD559\uC0DD\uC774 \uC5C6\uC2B5\uB2C8\uB2E4." : "\uD559\uC0DD\uBCC4 \uC751\uB2F5 \uC2A4\uB0C5\uC0F7\uC774 \uC5C6\uC5B4 drill-down\uC744 \uC5F4 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.",
         items: summary.studentResponses.filter((student) => student.assignmentStatus === item.label).map((student) => this.buildLessonStudentDrilldownItem(student))
       })),
-      "\uACFC\uC81C \uC218\uD589 \uC9D1\uACC4\uAC00 \uC5C6\uC2B5\uB2C8\uB2E4."
+      "\uBCF5\uC2B5/\uC218\uD589 \uC9D1\uACC4\uAC00 \uC5C6\uC2B5\uB2C8\uB2E4."
     );
     this.renderStudentDrilldownCard(
       grid,
@@ -1756,14 +1756,14 @@ var ClassPageView = class extends import_obsidian2.ItemView {
       title: formatStudentLabel(student.student),
       meta: `\uC815\uB2F5 ${student.correctCount} / \uC624\uB2F5 ${student.incorrectCount}`,
       summary: [
-        student.assignmentStatus ? `\uACFC\uC81C: ${student.assignmentStatus}` : "",
+        student.assignmentStatus ? `\uBCF5\uC2B5/\uC218\uD589: ${student.assignmentStatus}` : "",
         student.followUp ? `\uD6C4\uC18D: ${student.followUp}` : ""
       ].filter(Boolean).join(" / ") || "\uC218\uC5C5 \uC751\uB2F5 \uC0C1\uC138 \uBCF4\uAE30",
       fields: this.compactDrilldownFields([
         ["\uB2E8\uC6D0", student.lessonUnit],
         ["\uC815\uB2F5 \uC218", String(student.correctCount)],
         ["\uC624\uB2F5 \uC218", String(student.incorrectCount)],
-        ["\uACFC\uC81C \uC218\uD589", student.assignmentStatus],
+        ["\uBCF5\uC2B5/\uC218\uD589 \uC0C1\uD0DC", student.assignmentStatus],
         ["\uD5F7\uAC08\uB9B0 \uBD80\uBD84", student.misconception],
         ["\uD6C4\uC18D \uC9C0\uB3C4", student.followUp],
         ["\uD2C0\uB9B0 \uC774\uC720", student.incorrectReason],
@@ -1778,12 +1778,12 @@ var ClassPageView = class extends import_obsidian2.ItemView {
       title: formatStudentLabel(student.student),
       meta: `\uC815\uB2F5 ${student.correctCount} / \uC624\uB2F5 ${student.incorrectCount}`,
       summary: [
-        student.assignmentStatus ? `\uACFC\uC81C: ${student.assignmentStatus}` : "",
+        student.assignmentStatus ? `\uBCF5\uC2B5/\uC218\uD589: ${student.assignmentStatus}` : "",
         student.misconception ? `\uD5F7\uAC08\uB9B0 \uBD80\uBD84: ${student.misconception}` : ""
       ].filter(Boolean).join(" / ") || "\uBCF4\uCDA9 \uC9C0\uB3C4 \uADFC\uAC70 \uBCF4\uAE30",
       tone: "warning",
       fields: this.compactDrilldownFields([
-        ["\uACFC\uC81C \uC218\uD589", student.assignmentStatus],
+        ["\uBCF5\uC2B5/\uC218\uD589 \uC0C1\uD0DC", student.assignmentStatus],
         ["\uD5F7\uAC08\uB9B0 \uBD80\uBD84", student.misconception],
         ["\uD2C0\uB9B0 \uC774\uC720", response?.incorrectReason || ""],
         ["\uC120\uC0DD\uB2D8\uAED8 \uD558\uACE0 \uC2F6\uC740 \uB9D0", response?.teacherMessage || ""],
@@ -1797,11 +1797,11 @@ var ClassPageView = class extends import_obsidian2.ItemView {
       title: formatStudentLabel(result.student),
       meta: `\uC815\uB2F5 ${result.correctCount} / \uC624\uB2F5 ${result.incorrectCount}`,
       summary: [
-        result.assignmentStatus ? `\uACFC\uC81C: ${result.assignmentStatus}` : "",
+        result.assignmentStatus ? `\uBCF5\uC2B5/\uC218\uD589: ${result.assignmentStatus}` : "",
         result.followUp ? `\uD6C4\uC18D \uC9C0\uB3C4: ${result.followUp}` : ""
       ].filter(Boolean).join(" / ") || "\uD559\uC0DD\uBCC4 \uACB0\uACFC \uBCF4\uAE30",
       fields: this.compactDrilldownFields([
-        ["\uACFC\uC81C \uC218\uD589", result.assignmentStatus],
+        ["\uBCF5\uC2B5/\uC218\uD589 \uC0C1\uD0DC", result.assignmentStatus],
         ["\uD6C4\uC18D \uC9C0\uB3C4", result.followUp],
         ["\uD2C0\uB9B0 \uC774\uC720", response?.incorrectReason || ""],
         ["\uC120\uC0DD\uB2D8\uAED8 \uD558\uACE0 \uC2F6\uC740 \uB9D0", response?.teacherMessage || ""],
@@ -1889,7 +1889,7 @@ var ClassPageView = class extends import_obsidian2.ItemView {
   }
   buildLessonSectionDescription(sourceState) {
     if (!sourceState || sourceState.status !== "loaded" || !sourceState.data) {
-      return "\uC5B4\uB824\uC6CC\uD55C \uAC1C\uB150, \uC815\uC624\uB2F5, \uACFC\uC81C \uC218\uD589 \uC815\uB3C4\uB97C \uC218\uC5C5\uC6A9 \uC9D1\uACC4 JSON\uC5D0\uC11C \uC77D\uC2B5\uB2C8\uB2E4.";
+      return "\uC5B4\uB824\uC6CC\uD55C \uBD80\uBD84, \uC815\uC624\uB2F5, \uBCF5\uC2B5/\uC218\uD589 \uC0C1\uD0DC\uB97C \uC218\uC5C5\uC6A9 \uC9D1\uACC4 JSON\uC5D0\uC11C \uC77D\uC2B5\uB2C8\uB2E4.";
     }
     return [
       sourceState.data.classroom,
@@ -2326,7 +2326,7 @@ function getStarAutoCriteriaSummary(criteria) {
   }
   const parts = [];
   if (criteria.assignmentStatusIn.length > 0) {
-    parts.push(`\uACFC\uC81C ${criteria.assignmentStatusIn.join("/")}`);
+    parts.push(`\uBCF5\uC2B5/\uC218\uD589 ${criteria.assignmentStatusIn.join("/")}`);
   }
   if (criteria.minimumCorrectCount !== null) {
     parts.push(`\uC815\uB2F5 ${criteria.minimumCorrectCount}\uAC1C \uC774\uC0C1`);

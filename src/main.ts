@@ -803,7 +803,7 @@ class ClassPageView extends ItemView {
     );
     this.renderStatCard(
       stats,
-      "과제 수행",
+      "복습/수행",
       summary.overview.assignmentCompletionLabel || "미분류",
       "집계 레이어 결과",
     );
@@ -830,19 +830,19 @@ class ClassPageView extends ItemView {
     );
     this.renderGroupedDrilldownCard(
       grid,
-      "과제 수행 분포",
+      "복습/수행 분포",
       summary.assignmentSummary.map((item) => ({
         title: item.label,
         meta: `${item.count}명`,
-        description: item.note || "과제 수행 상태",
+        description: item.note || "복습/수행 상태",
         emptyMessage: hasStudentSnapshots
-          ? "해당 과제 수행 학생이 없습니다."
+          ? "해당 복습/수행 상태 학생이 없습니다."
           : "학생별 응답 스냅샷이 없어 drill-down을 열 수 없습니다.",
         items: summary.studentResponses
           .filter((student) => student.assignmentStatus === item.label)
           .map((student) => this.buildLessonStudentDrilldownItem(student)),
       })),
-      "과제 수행 집계가 없습니다.",
+      "복습/수행 집계가 없습니다.",
     );
     this.renderStudentDrilldownCard(
       grid,
@@ -1364,14 +1364,14 @@ class ClassPageView extends ItemView {
       title: formatStudentLabel(student.student),
       meta: `정답 ${student.correctCount} / 오답 ${student.incorrectCount}`,
       summary: [
-        student.assignmentStatus ? `과제: ${student.assignmentStatus}` : "",
+        student.assignmentStatus ? `복습/수행: ${student.assignmentStatus}` : "",
         student.followUp ? `후속: ${student.followUp}` : "",
       ].filter(Boolean).join(" / ") || "수업 응답 상세 보기",
       fields: this.compactDrilldownFields([
         ["단원", student.lessonUnit],
         ["정답 수", String(student.correctCount)],
         ["오답 수", String(student.incorrectCount)],
-        ["과제 수행", student.assignmentStatus],
+        ["복습/수행 상태", student.assignmentStatus],
         ["헷갈린 부분", student.misconception],
         ["후속 지도", student.followUp],
         ["틀린 이유", student.incorrectReason],
@@ -1390,12 +1390,12 @@ class ClassPageView extends ItemView {
       title: formatStudentLabel(student.student),
       meta: `정답 ${student.correctCount} / 오답 ${student.incorrectCount}`,
       summary: [
-        student.assignmentStatus ? `과제: ${student.assignmentStatus}` : "",
+        student.assignmentStatus ? `복습/수행: ${student.assignmentStatus}` : "",
         student.misconception ? `헷갈린 부분: ${student.misconception}` : "",
       ].filter(Boolean).join(" / ") || "보충 지도 근거 보기",
       tone: "warning",
       fields: this.compactDrilldownFields([
-        ["과제 수행", student.assignmentStatus],
+        ["복습/수행 상태", student.assignmentStatus],
         ["헷갈린 부분", student.misconception],
         ["틀린 이유", response?.incorrectReason || ""],
         ["선생님께 하고 싶은 말", response?.teacherMessage || ""],
@@ -1413,11 +1413,11 @@ class ClassPageView extends ItemView {
       title: formatStudentLabel(result.student),
       meta: `정답 ${result.correctCount} / 오답 ${result.incorrectCount}`,
       summary: [
-        result.assignmentStatus ? `과제: ${result.assignmentStatus}` : "",
+        result.assignmentStatus ? `복습/수행: ${result.assignmentStatus}` : "",
         result.followUp ? `후속 지도: ${result.followUp}` : "",
       ].filter(Boolean).join(" / ") || "학생별 결과 보기",
       fields: this.compactDrilldownFields([
-        ["과제 수행", result.assignmentStatus],
+        ["복습/수행 상태", result.assignmentStatus],
         ["후속 지도", result.followUp],
         ["틀린 이유", response?.incorrectReason || ""],
         ["선생님께 하고 싶은 말", response?.teacherMessage || ""],
@@ -1556,7 +1556,7 @@ class ClassPageView extends ItemView {
     sourceState: AggregateSourceState<LessonSummaryAggregate> | null,
   ): string {
     if (!sourceState || sourceState.status !== "loaded" || !sourceState.data) {
-      return "어려워한 개념, 정오답, 과제 수행 정도를 수업용 집계 JSON에서 읽습니다.";
+      return "어려워한 부분, 정오답, 복습/수행 상태를 수업용 집계 JSON에서 읽습니다.";
     }
 
     return [
@@ -2110,7 +2110,7 @@ function getStarAutoCriteriaSummary(criteria: StarAutoCriteria | null): string {
 
   const parts: string[] = [];
   if (criteria.assignmentStatusIn.length > 0) {
-    parts.push(`과제 ${criteria.assignmentStatusIn.join("/")}`);
+    parts.push(`복습/수행 ${criteria.assignmentStatusIn.join("/")}`);
   }
   if (criteria.minimumCorrectCount !== null) {
     parts.push(`정답 ${criteria.minimumCorrectCount}개 이상`);
