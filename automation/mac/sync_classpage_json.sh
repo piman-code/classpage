@@ -2,6 +2,8 @@
 
 set -euo pipefail
 
+# Copy this template outside the repo before editing local paths.
+# Do not commit a machine-specific copy with real vault paths back into Git.
 # Update these two paths for your environment.
 DRIVE_JSON_DIR="$HOME/Library/CloudStorage/GoogleDrive-your-account/My Drive/classpage-sync"
 OBSIDIAN_JSON_DIR="$HOME/Documents/Obsidian/MySchoolVault/classpage-data"
@@ -9,6 +11,7 @@ OBSIDIAN_JSON_DIR="$HOME/Documents/Obsidian/MySchoolVault/classpage-data"
 FILES=(
   "class-summary.json"
   "lesson-summary.json"
+  "star-ledger.json"
 )
 
 mkdir -p "$OBSIDIAN_JSON_DIR"

@@ -14,8 +14,16 @@ import type {
   AggregateSourceState,
   ClassPageFormSettings,
   ClassPageSettings,
+  ClassStudentResponse,
   ClassSummaryAggregate,
   LessonSummaryAggregate,
+  LessonStudentResponse,
+  StarAutoCriteria,
+  StarEvent,
+  StarModeLedger,
+  StarRuleSettings,
+  StarStudentTotal,
+  StudentReference,
   StudentPageSettings,
   TeacherPageData,
   TeacherPageSettings,
@@ -24,13 +32,40 @@ import type {
 const VIEW_TYPE_CLASSPAGE = "classpage-view";
 
 type PageMode = "student" | "teacher";
+type TeacherFocusMode = "overview" | "class" | "lesson" | "star";
 type RowTone = "neutral" | "warning" | "positive";
+type TeacherAggregateState =
+  | AggregateSourceState<ClassSummaryAggregate>
+  | AggregateSourceState<LessonSummaryAggregate>
+  | AggregateSourceState<StarModeLedger>;
 
 interface DetailRow {
   title: string;
   meta: string;
   description: string;
   tone?: RowTone;
+}
+
+interface DrilldownField {
+  label: string;
+  value: string;
+}
+
+interface DrilldownItem {
+  title: string;
+  meta: string;
+  summary: string;
+  tone?: RowTone;
+  fields: DrilldownField[];
+}
+
+interface DrilldownGroup {
+  title: string;
+  meta: string;
+  description: string;
+  tone?: RowTone;
+  emptyMessage: string;
+  items: DrilldownItem[];
 }
 
 export default class ClassPagePlugin extends Plugin {
@@ -101,6 +136,7 @@ export default class ClassPagePlugin extends Plugin {
 
 class ClassPageView extends ItemView {
   private pageMode: PageMode = "student";
+  private teacherFocusMode: TeacherFocusMode = "overview";
   private renderToken = 0;
 
   constructor(
@@ -160,7 +196,11 @@ class ClassPageView extends ItemView {
       return;
     }
 
-    this.renderTeacherPage(shell, settings.teacherPage, teacherData);
+    this.renderTeacherPage(
+      shell,
+      settings.teacherPage,
+      teacherData,
+    );
   }
 
   private renderHeader(
@@ -227,22 +267,11 @@ class ClassPageView extends ItemView {
     parent: HTMLElement,
     settings: StudentPageSettings,
   ): void {
-    this.renderBoundaryCard(
-      parent,
-      "학생용 페이지 구조",
-      "이 화면은 classpage 설정값과 Google Form 링크만 사용합니다. 학생 응답 원본이나 집계 결과는 여기서 직접 계산하지 않습니다.",
-      [
-        `정적 설정: 오늘의 할 일, 공지사항, 버튼 문구`,
-        `외부 입력: 학급용/수업용 Google Form 제출`,
-        `수정 위치: Settings -> classpage`,
-      ],
-    );
-
     const boardSection = parent.createDiv({ cls: "classpage-section" });
     this.renderSectionHeader(
       boardSection,
       "오늘 확인할 내용",
-      "학생용 화면은 운영자가 설정한 정적 문구를 그대로 보여줍니다.",
+      "공지와 오늘 할 일을 먼저 보고 필요한 준비를 마칩니다.",
     );
 
     const board = boardSection.createDiv({ cls: "classpage-board" });
@@ -253,7 +282,7 @@ class ClassPageView extends ItemView {
     this.renderSectionHeader(
       formsSection,
       "제출 바로가기",
-      "버튼은 Google Form 원본 링크로 이동만 하고, classpage 안에서 응답을 저장하지 않습니다.",
+      "버튼을 누르면 Google Form 제출 화면이 바로 열립니다.",
     );
 
     const forms = formsSection.createDiv({ cls: "classpage-form-grid" });
@@ -266,61 +295,51 @@ class ClassPageView extends ItemView {
     settings: TeacherPageSettings,
     teacherData: TeacherPageData | null,
   ): void {
-    this.renderBoundaryCard(
-      parent,
-      "교사용 페이지 구조",
-      "교사용 화면은 Google Form 원본 응답을 직접 읽지 않고, Google Sheets 또는 Apps Script가 만든 집계 JSON만 읽습니다. 이 구조로 수집, 집계, 표시 역할을 분리합니다.",
-      [
-        `원본 입력: Google Form / Google Sheets`,
-        `집계 레이어: Apps Script 또는 외부 자동화가 JSON 생성`,
-        `표시 레이어: classpage가 JSON을 읽어 요약 카드와 목록 표시`,
-      ],
-    );
+    this.renderTeacherStatusSection(parent, teacherData);
 
-    const sourceSection = parent.createDiv({ cls: "classpage-section" });
-    this.renderSectionHeader(
-      sourceSection,
-      "집계 연결 상태",
-      "교사용 화면에서 보이는 값은 아래 JSON 경로에 있는 집계 결과입니다. 경로만 바꾸면 표시 데이터가 함께 바뀝니다.",
-    );
+    if (this.shouldShowTeacherSection("class")) {
+      const classSection = parent.createDiv({ cls: "classpage-section" });
+      this.renderSectionHeader(
+        classSection,
+        settings.classSummaryTitle,
+        this.buildClassSectionDescription(teacherData?.classSummary ?? null),
+      );
+      this.renderClassSummaryCard(
+        classSection,
+        teacherData?.classSummary ?? null,
+        settings.classSummaryEmptyMessage,
+      );
+    }
 
-    const sourceGrid = sourceSection.createDiv({ cls: "classpage-source-grid" });
-    this.renderSourceCard(
-      sourceGrid,
-      "학급용 집계 파일",
-      "학급용 Google Form -> Google Sheets -> Apps Script/집계 레이어 -> class-summary.json",
-      teacherData?.classSummary ?? null,
-    );
-    this.renderSourceCard(
-      sourceGrid,
-      "수업용 집계 파일",
-      "수업용 Google Form -> Google Sheets -> Apps Script/집계 레이어 -> lesson-summary.json",
-      teacherData?.lessonSummary ?? null,
-    );
+    if (this.shouldShowTeacherSection("lesson")) {
+      const lessonSection = parent.createDiv({ cls: "classpage-section" });
+      this.renderSectionHeader(
+        lessonSection,
+        settings.lessonSummaryTitle,
+        this.buildLessonSectionDescription(teacherData?.lessonSummary ?? null),
+      );
+      this.renderLessonSummaryCard(
+        lessonSection,
+        teacherData?.lessonSummary ?? null,
+        settings.lessonSummaryEmptyMessage,
+      );
+    }
 
-    const classSection = parent.createDiv({ cls: "classpage-section" });
-    this.renderSectionHeader(
-      classSection,
-      settings.classSummaryTitle,
-      this.buildClassSectionDescription(teacherData?.classSummary ?? null),
-    );
-    this.renderClassSummaryCard(
-      classSection,
-      teacherData?.classSummary ?? null,
-      settings.classSummaryEmptyMessage,
-    );
+    if (this.shouldShowTeacherSection("star")) {
+      const starSection = parent.createDiv({ cls: "classpage-section" });
+      this.renderSectionHeader(
+        starSection,
+        settings.starLedgerTitle,
+        this.buildStarSectionDescription(teacherData?.starLedger ?? null),
+      );
+      this.renderStarLedgerCard(
+        starSection,
+        teacherData?.starLedger ?? null,
+        settings.starLedgerEmptyMessage,
+      );
+    }
 
-    const lessonSection = parent.createDiv({ cls: "classpage-section" });
-    this.renderSectionHeader(
-      lessonSection,
-      settings.lessonSummaryTitle,
-      this.buildLessonSectionDescription(teacherData?.lessonSummary ?? null),
-    );
-    this.renderLessonSummaryCard(
-      lessonSection,
-      teacherData?.lessonSummary ?? null,
-      settings.lessonSummaryEmptyMessage,
-    );
+    this.renderTeacherAdvancedSection(parent, teacherData);
   }
 
   private renderBoundaryCard(
@@ -361,6 +380,141 @@ class ClassPageView extends ItemView {
       cls: "classpage-section__description",
       text: description,
     });
+  }
+
+  private renderTeacherStatusSection(
+    parent: HTMLElement,
+    teacherData: TeacherPageData | null,
+  ): void {
+    const section = parent.createDiv({ cls: "classpage-section" });
+    this.renderSectionHeader(
+      section,
+      "오늘 상태",
+      "카드를 눌러 필요한 영역만 보고, 다시 누르면 전체를 봅니다.",
+    );
+
+    const grid = section.createDiv({ cls: "classpage-dashboard-grid" });
+    this.renderTeacherStatusCard(
+      grid,
+      "class",
+      "학급",
+      teacherData?.classSummary ?? null,
+    );
+    this.renderTeacherStatusCard(
+      grid,
+      "lesson",
+      "수업",
+      teacherData?.lessonSummary ?? null,
+    );
+    this.renderTeacherStatusCard(
+      grid,
+      "star",
+      "별점",
+      teacherData?.starLedger ?? null,
+    );
+  }
+
+  private renderTeacherStatusCard(
+    parent: HTMLElement,
+    mode: Exclude<TeacherFocusMode, "overview">,
+    title: string,
+    sourceState: TeacherAggregateState | null,
+  ): void {
+    const button = parent.createEl("button", {
+      cls: "classpage-card classpage-dashboard-card",
+      attr: { type: "button" },
+    });
+
+    if (this.teacherFocusMode === mode) {
+      button.addClass("is-active");
+    }
+
+    const header = button.createDiv({ cls: "classpage-dashboard-card__header" });
+    header.createEl("span", {
+      cls: "classpage-dashboard-card__label",
+      text: title,
+    });
+    header.createEl("span", {
+      cls: `classpage-source-status classpage-source-status--${sourceState?.status ?? "missing"}`,
+      text: sourceState ? this.getSourceStatusLabel(sourceState.status) : "대기",
+    });
+
+    button.createEl("strong", {
+      cls: "classpage-dashboard-card__value",
+      text: this.getTeacherStatusPrimaryValue(mode, sourceState),
+    });
+    button.createEl("p", {
+      cls: "classpage-dashboard-card__meta",
+      text: this.getTeacherStatusPrimaryMeta(mode, sourceState),
+    });
+    button.createEl("p", {
+      cls: "classpage-dashboard-card__hint",
+      text: this.getTeacherStatusHint(mode, sourceState),
+    });
+
+    button.addEventListener("click", () => {
+      if (this.teacherFocusMode === mode) {
+        this.teacherFocusMode = "overview";
+        this.render();
+        return;
+      }
+
+      this.teacherFocusMode = mode;
+      this.render();
+    });
+  }
+
+  private renderTeacherAdvancedSection(
+    parent: HTMLElement,
+    teacherData: TeacherPageData | null,
+  ): void {
+    const details = parent.createEl("details", {
+      cls: "classpage-card classpage-advanced",
+    });
+    details.createEl("summary", {
+      cls: "classpage-advanced__summary",
+      text: "구조/파일 보기",
+    });
+
+    const content = details.createDiv({ cls: "classpage-advanced__content" });
+    this.renderBoundaryCard(
+      content,
+      "집계 구조",
+      "필요할 때만 구조와 파일 위치를 확인합니다. 첫 화면에서는 상태와 업무 선택이 먼저 보이도록 뺐습니다.",
+      [
+        `수집: Google Form`,
+        `저장: Google Sheets`,
+        `집계: Apps Script 또는 외부 자동화`,
+        `표시: classpage`,
+      ],
+    );
+
+    const sourceSection = content.createDiv({ cls: "classpage-section" });
+    this.renderSectionHeader(
+      sourceSection,
+      "파일 상태 상세",
+      this.getTeacherSourceDescription(),
+    );
+
+    const sourceGrid = sourceSection.createDiv({ cls: "classpage-source-grid" });
+    this.renderSourceCard(
+      sourceGrid,
+      "학급용 집계 파일",
+      "학급용 Google Form -> Google Sheets -> Apps Script/집계 레이어 -> class-summary.json",
+      teacherData?.classSummary ?? null,
+    );
+    this.renderSourceCard(
+      sourceGrid,
+      "수업용 집계 파일",
+      "수업용 Google Form -> Google Sheets -> Apps Script/집계 레이어 -> lesson-summary.json",
+      teacherData?.lessonSummary ?? null,
+    );
+    this.renderSourceCard(
+      sourceGrid,
+      "별점모드 집계 파일",
+      "학급용/수업용 응답 -> Apps Script 별점 이벤트 집계 -> star-ledger.json",
+      teacherData?.starLedger ?? null,
+    );
   }
 
   private renderListCard(
@@ -430,7 +584,9 @@ class ClassPageView extends ItemView {
     parent: HTMLElement,
     title: string,
     flowText: string,
-    sourceState: AggregateSourceState<ClassSummaryAggregate | LessonSummaryAggregate> | null,
+    sourceState: AggregateSourceState<
+      ClassSummaryAggregate | LessonSummaryAggregate | StarModeLedger
+    > | null,
   ): void {
     const card = parent.createDiv({ cls: "classpage-card classpage-source-card" });
     const cardHeader = card.createDiv({ cls: "classpage-source-card__header" });
@@ -468,15 +624,30 @@ class ClassPageView extends ItemView {
 
     const metaList = card.createEl("dl", { cls: "classpage-meta-list" });
     this.renderMetaRow(metaList, "집계 시각", formatDateLabel(sourceState.data.generatedAt));
-    this.renderMetaRow(metaList, "반영 응답", `${sourceState.data.responseCount}건`);
-    if (sourceState.data.excludedResponseCount > 0) {
-      this.renderMetaRow(
-        metaList,
-        "제외 응답",
-        `${sourceState.data.excludedResponseCount}건`,
-      );
+    if (sourceState.data.type === "star-ledger") {
+      this.renderMetaRow(metaList, "반영 이벤트", `${sourceState.data.eventCount}건`);
+      if (sourceState.data.excludedResponseCount > 0) {
+        this.renderMetaRow(
+          metaList,
+          "제외 응답",
+          `${sourceState.data.excludedResponseCount}건`,
+        );
+      }
+      this.renderMetaRow(metaList, "활성 규칙", `${getEnabledStarRules(sourceState.data.rules).length}개`);
+      this.renderMetaRow(metaList, "자동 적립", `${getAutomaticStarEventCount(sourceState.data.sourceSummary)}건`);
+      this.renderMetaRow(metaList, "수동/일괄", `${sourceState.data.sourceSummary.manual}건`);
+      this.renderMetaRow(metaList, "범위", sourceState.data.periodLabel);
+    } else {
+      this.renderMetaRow(metaList, "반영 응답", `${sourceState.data.responseCount}건`);
+      if (sourceState.data.excludedResponseCount > 0) {
+        this.renderMetaRow(
+          metaList,
+          "제외 응답",
+          `${sourceState.data.excludedResponseCount}건`,
+        );
+      }
+      this.renderMetaRow(metaList, "범위", sourceState.data.periodLabel);
     }
-    this.renderMetaRow(metaList, "범위", sourceState.data.periodLabel);
 
     if (sourceState.data.source.formName) {
       this.renderMetaRow(metaList, "원본 폼", sourceState.data.source.formName);
@@ -500,6 +671,8 @@ class ClassPageView extends ItemView {
     }
 
     const summary = sourceState.data;
+    const responseMap = this.buildStudentResponseMap(summary.studentResponses);
+    const hasStudentSnapshots = summary.studentResponses.length > 0;
     const stats = parent.createDiv({ cls: "classpage-stat-grid" });
     this.renderStatCard(
       stats,
@@ -527,43 +700,58 @@ class ClassPageView extends ItemView {
     );
 
     const grid = parent.createDiv({ cls: "classpage-summary-grid" });
-    this.renderDetailRowsCard(
+    this.renderGroupedDrilldownCard(
       grid,
       "정서 상태 분포",
-      summary.emotionSummary.map((item) => this.buildCountRow(item)),
+      summary.emotionSummary.map((item) => ({
+        title: item.label,
+        meta: `${item.count}명`,
+        description: item.note || "정서 상태 분포",
+        emptyMessage: hasStudentSnapshots
+          ? "해당 상태 학생이 없습니다."
+          : "학생별 응답 스냅샷이 없어 drill-down을 열 수 없습니다.",
+        items: summary.studentResponses
+          .filter((student) => student.emotionLabel === item.label)
+          .map((student) => this.buildClassResponseDrilldownItem(student)),
+      })),
       "정서 분포 데이터가 없습니다.",
     );
-    this.renderDetailRowsCard(
+    this.renderGroupedDrilldownCard(
       grid,
       "목표 달성 분포",
-      summary.goalSummary.map((item) => this.buildCountRow(item)),
+      summary.goalSummary.map((item) => ({
+        title: item.label,
+        meta: `${item.count}명`,
+        description: item.note || "목표 달성 분포",
+        emptyMessage: hasStudentSnapshots
+          ? "해당 달성도 학생이 없습니다."
+          : "학생별 응답 스냅샷이 없어 drill-down을 열 수 없습니다.",
+        items: summary.studentResponses
+          .filter((student) => student.goalLabel === item.label)
+          .map((student) => this.buildClassResponseDrilldownItem(student)),
+      })),
       "목표 분포 데이터가 없습니다.",
     );
-    this.renderDetailRowsCard(
+    this.renderStudentDrilldownCard(
       grid,
       "도움이 필요한 학생",
-      summary.supportStudents.map((student) => ({
-        title: formatStudentLabel(student.student),
-        meta: student.mood || "상태 확인 필요",
-        description: [
-          student.reason ? `이유: ${student.reason}` : "",
-          student.goal ? `오늘 목표: ${student.goal}` : "",
-          student.yesterdayAchievement ? `어제 달성도: ${student.yesterdayAchievement}` : "",
-          student.teacherNote ? `메모: ${student.teacherNote}` : "",
-        ].filter(Boolean).join(" / "),
-        tone: "warning",
-      })),
+      summary.supportStudents.map((student) =>
+        this.buildClassSupportDrilldownItem(
+          student,
+          this.findClassResponseByStudent(responseMap, student.student),
+        )
+      ),
       "현재 표시할 학생이 없습니다.",
     );
-    this.renderDetailRowsCard(
+    this.renderStudentDrilldownCard(
       grid,
       "칭찬/격려 후보",
-      summary.praiseCandidates.map((student) => ({
-        title: formatStudentLabel(student.student),
-        meta: student.mentionedPeer ? `언급 친구: ${student.mentionedPeer}` : "관계 기록",
-        description: student.reason || "칭찬 사유 없음",
-        tone: "positive",
-      })),
+      summary.praiseCandidates.map((student) =>
+        this.buildPraiseCandidateDrilldownItem(
+          student,
+          this.findClassResponseByStudent(responseMap, student.student),
+        )
+      ),
       "현재 표시할 학생이 없습니다.",
     );
   }
@@ -579,6 +767,8 @@ class ClassPageView extends ItemView {
     }
 
     const summary = sourceState.data;
+    const responseMap = this.buildLessonResponseMap(summary.studentResponses);
+    const hasStudentSnapshots = summary.studentResponses.length > 0;
     const stats = parent.createDiv({ cls: "classpage-stat-grid" });
     this.renderStatCard(
       stats,
@@ -601,12 +791,12 @@ class ClassPageView extends ItemView {
     this.renderStatCard(
       stats,
       "과제 수행",
-      summary.overview.assignmentCompletionLabel || "-",
+      summary.overview.assignmentCompletionLabel || "미분류",
       "집계 레이어 결과",
     );
 
     const grid = parent.createDiv({ cls: "classpage-summary-grid" });
-    this.renderDetailRowsCard(
+    this.renderGroupedDrilldownCard(
       grid,
       "어려워한 개념",
       summary.difficultConcepts.map((item) => ({
@@ -615,44 +805,151 @@ class ClassPageView extends ItemView {
         description: [item.averageUnderstanding, item.note]
           .filter(Boolean)
           .join(" / "),
-        tone: "warning",
+        tone: item.count > 0 ? "warning" : undefined,
+        emptyMessage: hasStudentSnapshots
+          ? "해당 개념에서 낮은 이해 학생이 없습니다."
+          : "학생별 응답 스냅샷이 없어 drill-down을 열 수 없습니다.",
+        items: summary.studentResponses
+          .filter((student) => this.hasLowConcept(student, item.concept))
+          .map((student) => this.buildLessonStudentDrilldownItem(student)),
       })),
       "어려워한 개념 데이터가 없습니다.",
     );
-    this.renderDetailRowsCard(
+    this.renderGroupedDrilldownCard(
       grid,
       "과제 수행 분포",
-      summary.assignmentSummary.map((item) => this.buildCountRow(item)),
+      summary.assignmentSummary.map((item) => ({
+        title: item.label,
+        meta: `${item.count}명`,
+        description: item.note || "과제 수행 상태",
+        emptyMessage: hasStudentSnapshots
+          ? "해당 과제 수행 학생이 없습니다."
+          : "학생별 응답 스냅샷이 없어 drill-down을 열 수 없습니다.",
+        items: summary.studentResponses
+          .filter((student) => student.assignmentStatus === item.label)
+          .map((student) => this.buildLessonStudentDrilldownItem(student)),
+      })),
       "과제 수행 집계가 없습니다.",
+    );
+    this.renderStudentDrilldownCard(
+      grid,
+      "보충 지도가 필요한 학생",
+      summary.supportStudents.map((student) =>
+        this.buildLessonSupportDrilldownItem(
+          student,
+          this.findLessonResponseByStudent(responseMap, student.student),
+        )
+      ),
+      "보충 지도가 필요한 학생이 없습니다.",
+    );
+
+    this.renderStudentDrilldownCard(
+      parent,
+      "학생별 정오답 및 과제 현황",
+      summary.studentResults.map((result) =>
+        this.buildStudentResultDrilldownItem(
+          result,
+          this.findLessonResponseByStudent(responseMap, result.student),
+        )
+      ),
+      "학생별 결과가 없습니다.",
+      true,
+    );
+  }
+
+  private renderStarLedgerCard(
+    parent: HTMLElement,
+    sourceState: AggregateSourceState<StarModeLedger> | null,
+    emptyMessage: string,
+  ): void {
+    if (!sourceState || sourceState.status !== "loaded" || !sourceState.data) {
+      this.renderEmptyAggregateCard(parent, emptyMessage, sourceState);
+      return;
+    }
+
+    const ledger = sourceState.data;
+    const enabledRules = getEnabledStarRules(ledger.rules);
+    const visibleRules = enabledRules.filter((rule) => rule.visibility === "student");
+    const teacherOnlyRules = enabledRules.filter((rule) => rule.visibility === "teacher");
+    const autoRules = enabledRules.filter((rule) => hasAutomaticStarSource(rule.sources));
+    const manualRules = enabledRules.filter((rule) => rule.sources.includes("manual"));
+    const topStudents = sortStarTotals(ledger.totals).slice(0, 5);
+    const automaticEventCount = getAutomaticStarEventCount(ledger.sourceSummary);
+
+    const stats = parent.createDiv({ cls: "classpage-stat-grid" });
+    this.renderStatCard(
+      stats,
+      "상태",
+      "기본 연결",
+      "읽기 전용 요약과 최근 이벤트를 확인합니다.",
+    );
+    this.renderStatCard(
+      stats,
+      "활성 규칙",
+      `${enabledRules.length}`,
+      `자동 ${autoRules.length}개 / 수동 ${manualRules.length}개`,
+    );
+    this.renderStatCard(
+      stats,
+      "학생 공개",
+      `${visibleRules.length}`,
+      `${ledger.totals.length}명 기준 공개 누적 계산`,
+    );
+    this.renderStatCard(
+      stats,
+      "교사 전용",
+      `${teacherOnlyRules.length}`,
+      "수동 조정과 숨김 반영은 조정 시트 기준",
+    );
+    this.renderStatCard(
+      stats,
+      "전체 이벤트",
+      `${ledger.eventCount}`,
+      `자동 ${automaticEventCount}건 / 수동 ${ledger.sourceSummary.manual}건`,
+    );
+    this.renderStatCard(
+      stats,
+      "수동/일괄",
+      ledger.sourceSummary.manual > 0 ? `${ledger.sourceSummary.manual}건` : "없음",
+      ledger.sourceSummary.manual > 0
+        ? "수동 조정 또는 일괄 부여가 ledger에 반영됨"
+        : "수동 조정/일괄 부여 입력 없음",
+    );
+
+    const grid = parent.createDiv({ cls: "classpage-summary-grid" });
+    this.renderDetailRowsCard(
+      grid,
+      "최근 별점 이벤트",
+      ledger.recentEvents.map((event) => this.buildStarEventRow(event, ledger.rules)),
+      "최근 이벤트가 없습니다.",
     );
     this.renderDetailRowsCard(
       grid,
-      "보충 지도가 필요한 학생",
-      summary.supportStudents.map((student) => ({
-        title: formatStudentLabel(student.student),
-        meta: `정답 ${student.correctCount} / 오답 ${student.incorrectCount}`,
-        description: [
-          student.misconception ? `헷갈린 부분: ${student.misconception}` : "",
-          student.assignmentStatus ? `과제: ${student.assignmentStatus}` : "",
-          student.teacherNote ? `메모: ${student.teacherNote}` : "",
-        ].filter(Boolean).join(" / "),
-        tone: "warning",
-      })),
-      "보충 지도가 필요한 학생이 없습니다.",
+      "상위 학생",
+      topStudents.map((total) => this.buildStarTotalRow(total)),
+      "표시할 학생이 없습니다.",
     );
 
     this.renderDetailRowsCard(
       parent,
-      "학생별 정오답 및 과제 현황",
-      summary.studentResults.map((result) => ({
-        title: formatStudentLabel(result.student),
-        meta: `정답 ${result.correctCount} / 오답 ${result.incorrectCount}`,
+      "활성 규칙",
+      enabledRules.map((rule) => ({
+        title: rule.label,
+        meta: `${formatSignedPoints(rule.delta)} · ${getStarCategoryLabel(rule.category)}`,
         description: [
-          result.assignmentStatus ? `과제: ${result.assignmentStatus}` : "",
-          result.followUp ? `후속 지도: ${result.followUp}` : "",
-        ].filter(Boolean).join(" / "),
+          rule.description,
+          getStarAutoCriteriaSummary(rule.autoCriteria),
+          getStarVisibilityLabel(rule.visibility),
+          getStarRuleSourceSummary(rule.sources),
+          rule.sources.includes("manual")
+            ? rule.allowCustomDelta
+              ? "수동 점수 직접 입력 허용"
+              : "수동 점수는 기본값 사용"
+            : "자동 적립 규칙",
+        ].join(" / "),
+        tone: rule.delta < 0 ? "warning" : "positive",
       })),
-      "학생별 결과가 없습니다.",
+      "활성 규칙이 없습니다.",
       true,
     );
   }
@@ -660,7 +957,9 @@ class ClassPageView extends ItemView {
   private renderEmptyAggregateCard(
     parent: HTMLElement,
     emptyMessage: string,
-    sourceState: AggregateSourceState<ClassSummaryAggregate | LessonSummaryAggregate> | null,
+    sourceState: AggregateSourceState<
+      ClassSummaryAggregate | LessonSummaryAggregate | StarModeLedger
+    > | null,
   ): void {
     const card = parent.createDiv({ cls: "classpage-card classpage-empty-card" });
     card.createEl("h3", {
@@ -706,6 +1005,153 @@ class ClassPageView extends ItemView {
       cls: "classpage-stat-card__description",
       text: description,
     });
+  }
+
+  private renderGroupedDrilldownCard(
+    parent: HTMLElement,
+    title: string,
+    groups: DrilldownGroup[],
+    emptyMessage: string,
+    isWide = false,
+  ): void {
+    const classes = ["classpage-card", "classpage-detail-card"];
+    if (isWide) {
+      classes.push("classpage-detail-card--wide");
+    }
+
+    const card = parent.createDiv({ cls: classes.join(" ") });
+    card.createEl("h3", {
+      cls: "classpage-card__title",
+      text: title,
+    });
+
+    if (groups.length === 0) {
+      card.createEl("p", {
+        cls: "classpage-empty-card__message",
+        text: emptyMessage,
+      });
+      return;
+    }
+
+    const list = card.createDiv({ cls: "classpage-accordion-list" });
+    for (const group of groups) {
+      const details = list.createEl("details", {
+        cls: `classpage-accordion${group.tone ? ` is-${group.tone}` : ""}`,
+      });
+      const summary = details.createEl("summary", {
+        cls: "classpage-accordion__summary",
+      });
+      this.renderDrilldownSummary(
+        summary,
+        group.title,
+        group.meta,
+        group.description,
+        "classpage-accordion__summary-text",
+      );
+
+      if (group.items.length === 0) {
+        details.createEl("p", {
+          cls: "classpage-drilldown-empty",
+          text: group.emptyMessage,
+        });
+        continue;
+      }
+
+      const studentList = details.createDiv({ cls: "classpage-drilldown-list" });
+      for (const item of group.items) {
+        this.renderStudentDrilldownItem(studentList, item);
+      }
+    }
+  }
+
+  private renderStudentDrilldownCard(
+    parent: HTMLElement,
+    title: string,
+    items: DrilldownItem[],
+    emptyMessage: string,
+    isWide = false,
+  ): void {
+    const classes = ["classpage-card", "classpage-detail-card"];
+    if (isWide) {
+      classes.push("classpage-detail-card--wide");
+    }
+
+    const card = parent.createDiv({ cls: classes.join(" ") });
+    card.createEl("h3", {
+      cls: "classpage-card__title",
+      text: title,
+    });
+
+    if (items.length === 0) {
+      card.createEl("p", {
+        cls: "classpage-empty-card__message",
+        text: emptyMessage,
+      });
+      return;
+    }
+
+    const list = card.createDiv({ cls: "classpage-drilldown-list" });
+    for (const item of items) {
+      this.renderStudentDrilldownItem(list, item);
+    }
+  }
+
+  private renderStudentDrilldownItem(parent: HTMLElement, item: DrilldownItem): void {
+    const details = parent.createEl("details", {
+      cls: `classpage-student-drilldown${item.tone ? ` is-${item.tone}` : ""}`,
+    });
+    const summary = details.createEl("summary", {
+      cls: "classpage-student-drilldown__summary",
+    });
+    this.renderDrilldownSummary(
+      summary,
+      item.title,
+      item.meta,
+      item.summary,
+      "classpage-student-drilldown__summary-text",
+    );
+
+    if (item.fields.length === 0) {
+      details.createEl("p", {
+        cls: "classpage-drilldown-empty",
+        text: "표시할 상세 내용이 없습니다.",
+      });
+      return;
+    }
+
+    const fieldList = details.createEl("dl", { cls: "classpage-drilldown-fields" });
+    for (const field of item.fields) {
+      this.renderMetaRow(fieldList, field.label, field.value);
+    }
+  }
+
+  private renderDrilldownSummary(
+    parent: HTMLElement,
+    title: string,
+    meta: string,
+    description: string,
+    textClass: string,
+  ): void {
+    const text = parent.createDiv({ cls: textClass });
+    const header = text.createDiv({ cls: "classpage-detail-list__header" });
+    header.createEl("strong", {
+      cls: "classpage-detail-list__title",
+      text: title,
+    });
+
+    if (meta) {
+      header.createEl("span", {
+        cls: "classpage-detail-list__meta",
+        text: meta,
+      });
+    }
+
+    if (description) {
+      text.createEl("p", {
+        cls: "classpage-detail-list__description",
+        text: description,
+      });
+    }
   }
 
   private renderDetailRowsCard(
@@ -781,6 +1227,301 @@ class ClassPageView extends ItemView {
     };
   }
 
+  private buildStudentResponseMap(
+    responses: ClassStudentResponse[],
+  ): Map<string, ClassStudentResponse> {
+    return new Map(
+      responses
+        .map((item) => [this.getStudentLookupKey(item.student), item] as const)
+        .filter((entry): entry is readonly [string, ClassStudentResponse] => entry[0] !== null),
+    );
+  }
+
+  private buildLessonResponseMap(
+    responses: LessonStudentResponse[],
+  ): Map<string, LessonStudentResponse> {
+    return new Map(
+      responses
+        .map((item) => [this.getStudentLookupKey(item.student), item] as const)
+        .filter((entry): entry is readonly [string, LessonStudentResponse] => entry[0] !== null),
+    );
+  }
+
+  private getStudentLookupKey(student: StudentReference): string | null {
+    if (!this.hasStudentLookupIdentity(student)) {
+      return null;
+    }
+
+    return [
+      student.classroom.trim().toLowerCase(),
+      student.number.trim().toLowerCase(),
+      student.name.trim().toLowerCase(),
+    ].join("|");
+  }
+
+  private hasStudentLookupIdentity(student: StudentReference): boolean {
+    return [
+      student.classroom,
+      student.number,
+      student.name,
+    ].some((value) => value.trim().length > 0);
+  }
+
+  private findClassResponseByStudent(
+    responses: Map<string, ClassStudentResponse>,
+    student: StudentReference,
+  ): ClassStudentResponse | null {
+    const key = this.getStudentLookupKey(student);
+    return key ? responses.get(key) ?? null : null;
+  }
+
+  private findLessonResponseByStudent(
+    responses: Map<string, LessonStudentResponse>,
+    student: StudentReference,
+  ): LessonStudentResponse | null {
+    const key = this.getStudentLookupKey(student);
+    return key ? responses.get(key) ?? null : null;
+  }
+
+  private buildClassResponseDrilldownItem(student: ClassStudentResponse): DrilldownItem {
+    return {
+      title: formatStudentLabel(student.student),
+      meta: student.mood || student.emotionLabel || "상태 확인 필요",
+      summary: [
+        student.goal ? `오늘 목표: ${student.goal}` : "",
+        student.yesterdayAchievement ? `어제 달성도: ${student.yesterdayAchievement}` : "",
+      ].filter(Boolean).join(" / ") || "제출 응답 상세 보기",
+      fields: this.compactDrilldownFields([
+        ["정서 분류", student.emotionLabel],
+        ["오늘 기분", student.mood],
+        ["기분 이유", student.moodReason],
+        ["오늘 목표", student.goal],
+        ["어제 할 일 달성도", student.yesterdayAchievement],
+        ["선생님께 하고 싶은 말", student.teacherMessage],
+        ["도움을 준 친구 기록", student.helpedFriend],
+        ["도움을 받은 친구 기록", student.helpedByFriend],
+        ["분석 메모", student.teacherNote],
+      ]),
+    };
+  }
+
+  private buildClassSupportDrilldownItem(
+    student: ClassSummaryAggregate["supportStudents"][number],
+    response: ClassStudentResponse | null,
+  ): DrilldownItem {
+    return {
+      title: formatStudentLabel(student.student),
+      meta: student.mood || "상태 확인 필요",
+      summary: student.reason || "도움이 필요한 근거 보기",
+      tone: "warning",
+      fields: this.compactDrilldownFields([
+        ["도움 필요 근거", student.reason],
+        ["오늘 목표", student.goal],
+        ["어제 할 일 달성도", student.yesterdayAchievement],
+        ["기분 이유", response?.moodReason || ""],
+        ["선생님께 하고 싶은 말", response?.teacherMessage || ""],
+        ["도움을 받은 친구 기록", response?.helpedByFriend || ""],
+        ["도움을 준 친구 기록", response?.helpedFriend || ""],
+        ["분석 메모", student.teacherNote || response?.teacherNote || ""],
+      ]),
+    };
+  }
+
+  private buildPraiseCandidateDrilldownItem(
+    student: ClassSummaryAggregate["praiseCandidates"][number],
+    response: ClassStudentResponse | null,
+  ): DrilldownItem {
+    return {
+      title: formatStudentLabel(student.student),
+      meta: student.mentionedPeer ? `언급 친구: ${student.mentionedPeer}` : "칭찬 후보",
+      summary: student.reason || "칭찬 사유 보기",
+      tone: "positive",
+      fields: this.compactDrilldownFields([
+        ["칭찬 사유", student.reason],
+        ["언급 친구", student.mentionedPeer],
+        ["도움을 준 친구 기록", response?.helpedFriend || ""],
+        ["기분 이유", response?.moodReason || ""],
+        ["오늘 목표", response?.goal || ""],
+      ]),
+    };
+  }
+
+  private buildLessonStudentDrilldownItem(student: LessonStudentResponse): DrilldownItem {
+    return {
+      title: formatStudentLabel(student.student),
+      meta: `정답 ${student.correctCount} / 오답 ${student.incorrectCount}`,
+      summary: [
+        student.assignmentStatus ? `과제: ${student.assignmentStatus}` : "",
+        student.followUp ? `후속: ${student.followUp}` : "",
+      ].filter(Boolean).join(" / ") || "수업 응답 상세 보기",
+      fields: this.compactDrilldownFields([
+        ["단원", student.lessonUnit],
+        ["정답 수", String(student.correctCount)],
+        ["오답 수", String(student.incorrectCount)],
+        ["과제 수행", student.assignmentStatus],
+        ["헷갈린 부분", student.misconception],
+        ["후속 지도", student.followUp],
+        ["틀린 이유", student.incorrectReason],
+        ["선생님께 하고 싶은 말", student.teacherMessage],
+        ["개념 응답", this.buildConceptSummary(student)],
+        ["분석 메모", student.teacherNote],
+      ]),
+    };
+  }
+
+  private buildLessonSupportDrilldownItem(
+    student: LessonSummaryAggregate["supportStudents"][number],
+    response: LessonStudentResponse | null,
+  ): DrilldownItem {
+    return {
+      title: formatStudentLabel(student.student),
+      meta: `정답 ${student.correctCount} / 오답 ${student.incorrectCount}`,
+      summary: [
+        student.assignmentStatus ? `과제: ${student.assignmentStatus}` : "",
+        student.misconception ? `헷갈린 부분: ${student.misconception}` : "",
+      ].filter(Boolean).join(" / ") || "보충 지도 근거 보기",
+      tone: "warning",
+      fields: this.compactDrilldownFields([
+        ["과제 수행", student.assignmentStatus],
+        ["헷갈린 부분", student.misconception],
+        ["틀린 이유", response?.incorrectReason || ""],
+        ["선생님께 하고 싶은 말", response?.teacherMessage || ""],
+        ["개념 응답", response ? this.buildConceptSummary(response) : ""],
+        ["분석 메모", student.teacherNote || response?.teacherNote || ""],
+      ]),
+    };
+  }
+
+  private buildStudentResultDrilldownItem(
+    result: LessonSummaryAggregate["studentResults"][number],
+    response: LessonStudentResponse | null,
+  ): DrilldownItem {
+    return {
+      title: formatStudentLabel(result.student),
+      meta: `정답 ${result.correctCount} / 오답 ${result.incorrectCount}`,
+      summary: [
+        result.assignmentStatus ? `과제: ${result.assignmentStatus}` : "",
+        result.followUp ? `후속 지도: ${result.followUp}` : "",
+      ].filter(Boolean).join(" / ") || "학생별 결과 보기",
+      fields: this.compactDrilldownFields([
+        ["과제 수행", result.assignmentStatus],
+        ["후속 지도", result.followUp],
+        ["틀린 이유", response?.incorrectReason || ""],
+        ["선생님께 하고 싶은 말", response?.teacherMessage || ""],
+        ["개념 응답", response ? this.buildConceptSummary(response) : ""],
+        ["분석 메모", response?.teacherNote || ""],
+      ]),
+    };
+  }
+
+  private buildConceptSummary(student: LessonStudentResponse): string {
+    return student.concepts
+      .map((item) => {
+        const parts = [item.concept, item.understandingLabel || item.understanding]
+          .filter(Boolean);
+        return parts.join(": ");
+      })
+      .filter(Boolean)
+      .join(" / ");
+  }
+
+  private hasLowConcept(student: LessonStudentResponse, concept: string): boolean {
+    return student.concepts.some((item) =>
+      item.concept === concept && item.understandingLabel === "낮음"
+    );
+  }
+
+  private compactDrilldownFields(
+    fields: Array<readonly [label: string, value: string]>,
+  ): DrilldownField[] {
+    return fields
+      .map(([label, value]) => ({
+        label,
+        value: value.trim(),
+      }))
+      .filter((item) => item.value.length > 0);
+  }
+
+  private getTeacherStatusPrimaryValue(
+    mode: Exclude<TeacherFocusMode, "overview">,
+    sourceState: TeacherAggregateState | null,
+  ): string {
+    if (!sourceState || sourceState.status !== "loaded" || !sourceState.data) {
+      return sourceState?.status === "invalid" ? "형식 확인" : "확인 필요";
+    }
+
+    if (mode === "star" || sourceState.data.type === "star-ledger") {
+      return "기본 연결";
+    }
+
+    return `${sourceState.data.responseCount}건`;
+  }
+
+  private getTeacherStatusPrimaryMeta(
+    mode: Exclude<TeacherFocusMode, "overview">,
+    sourceState: TeacherAggregateState | null,
+  ): string {
+    if (!sourceState || sourceState.status !== "loaded" || !sourceState.data) {
+      return sourceState?.message || "집계 파일 상태를 확인하세요.";
+    }
+
+    if (mode === "star" && sourceState.data.type === "star-ledger") {
+      const enabledRules = getEnabledStarRules(sourceState.data.rules);
+      return [
+        `규칙 ${enabledRules.length}개`,
+        `학생 ${sourceState.data.totals.length}명`,
+      ].join(" · ");
+    }
+
+    return sourceState.data.periodLabel || "범위 미확인";
+  }
+
+  private getTeacherStatusHint(
+    mode: Exclude<TeacherFocusMode, "overview">,
+    sourceState: TeacherAggregateState | null,
+  ): string {
+    const actionHint = this.teacherFocusMode === mode
+      ? "다시 누르면 전체 보기"
+      : "누르면 이 영역만 보기";
+
+    if (!sourceState || sourceState.status !== "loaded" || !sourceState.data) {
+      return `${actionHint} · 연결과 JSON 경로를 확인하세요.`;
+    }
+
+    const suffix = sourceState.data.type === "star-ledger"
+      ? [
+          sourceState.data.eventCount > 0
+            ? `이벤트 ${sourceState.data.eventCount}건`
+            : "이벤트 없음",
+          `집계 ${formatDateLabel(sourceState.data.generatedAt, "시각 미확인")}`,
+        ].join(" · ")
+      : [
+          `집계 ${formatDateLabel(sourceState.data.generatedAt, "시각 미확인")}`,
+          sourceState.data.excludedResponseCount > 0
+            ? `제외 ${sourceState.data.excludedResponseCount}건`
+            : "",
+        ].filter(Boolean).join(" · ");
+
+    switch (mode) {
+      case "class":
+        return `${actionHint} · 정서와 목표 상태 확인 · ${suffix}`;
+      case "lesson":
+        return `${actionHint} · 수업 이해와 과제 상태 확인 · ${suffix}`;
+      case "star":
+        return `${actionHint} · 읽기 전용 별점 요약 확인 · ${suffix}`;
+    }
+  }
+
+  private getTeacherSourceDescription(): string {
+    return "문제가 생기면 이 섹션에서 JSON 경로, 집계 시각, 원본 시트 이름을 확인합니다.";
+  }
+
+  private shouldShowTeacherSection(
+    section: Exclude<TeacherFocusMode, "overview">,
+  ): boolean {
+    return this.teacherFocusMode === "overview" || this.teacherFocusMode === section;
+  }
+
   private buildClassSectionDescription(
     sourceState: AggregateSourceState<ClassSummaryAggregate> | null,
   ): string {
@@ -816,6 +1557,27 @@ class ClassPageView extends ItemView {
     ].filter(Boolean).join(" · ");
   }
 
+  private buildStarSectionDescription(
+    sourceState: AggregateSourceState<StarModeLedger> | null,
+  ): string {
+    if (!sourceState || sourceState.status !== "loaded" || !sourceState.data) {
+      return "별점 ledger의 읽기 전용 요약과 최근 이벤트를 확인합니다.";
+    }
+
+    const enabledRules = getEnabledStarRules(sourceState.data.rules);
+
+    return [
+      "기본 연결",
+      sourceState.data.periodLabel,
+      `규칙 ${enabledRules.length}개`,
+      `학생 ${sourceState.data.totals.length}명`,
+      `자동 ${getAutomaticStarEventCount(sourceState.data.sourceSummary)}건`,
+      sourceState.data.sourceSummary.manual > 0
+        ? `수동/일괄 ${sourceState.data.sourceSummary.manual}건`
+        : "",
+    ].filter(Boolean).join(" · ");
+  }
+
   private buildResponseCountDescription(
     summary: Pick<ClassSummaryAggregate | LessonSummaryAggregate, "periodLabel" | "excludedResponseCount">,
   ): string {
@@ -823,7 +1585,43 @@ class ClassPageView extends ItemView {
       return `${summary.periodLabel} / 제외 ${summary.excludedResponseCount}건`;
     }
 
-    return `${summary.periodLabel} / 허가 학생 기준`;
+    return `${summary.periodLabel} / 반영 응답 기준`;
+  }
+
+  private buildStarEventRow(
+    event: StarEvent,
+    rules: StarRuleSettings[],
+  ): DetailRow {
+    const rule = rules.find((item) => item.ruleId === event.ruleId);
+    const sourceLabel = getStarEventSourceLabel(event);
+    const timeLabel = formatDateLabel(event.occurredAt, "시각 미확인");
+
+    return {
+      title: `${rule?.label ?? "규칙 미확인"} · ${formatStudentLabel(event.student)}`,
+      meta: `${formatSignedPoints(event.delta)} · ${getStarVisibilityLabel(event.visibility)}`,
+      description: [
+        getStarCategoryLabel(event.category),
+        sourceLabel,
+        timeLabel,
+        event.actor ? `교사 ${event.actor}` : "",
+        event.batchId ? `batch ${event.batchId}` : "",
+        event.note || rule?.description || "설명 미확인",
+      ].filter(Boolean).join(" / "),
+      tone: event.delta < 0 ? "warning" : "positive",
+    };
+  }
+
+  private buildStarTotalRow(total: StarStudentTotal): DetailRow {
+    return {
+      title: formatStudentLabel(total.student),
+      meta: `총 ${formatSignedPoints(total.total)}`,
+      description: [
+        `학생 공개 ${formatSignedPoints(total.visibleTotal)}`,
+        `교사 조정 ${formatSignedPoints(total.hiddenAdjustmentTotal)}`,
+        `이벤트 ${total.eventCount}건`,
+      ].join(" / "),
+      tone: total.hiddenAdjustmentTotal < 0 ? "warning" : "positive",
+    };
   }
 
   private getSourceStatusLabel(
@@ -1010,7 +1808,7 @@ class ClassPageSettingTab extends PluginSettingTab {
 
     this.addTextSetting(
       "상태 문구",
-      "데이터 흐름을 상단에 짧게 표시합니다.",
+      "상단 배지에 짧게 표시할 안내 문구입니다.",
       settings.teacherPage.statusMessage,
       async (value) => {
         settings.teacherPage.statusMessage = value.trim();
@@ -1034,6 +1832,16 @@ class ClassPageSettingTab extends PluginSettingTab {
       settings.teacherPage.lessonSummaryTitle,
       async (value) => {
         settings.teacherPage.lessonSummaryTitle = value.trim() || DEFAULT_SETTINGS.teacherPage.lessonSummaryTitle;
+        await this.plugin.saveSettings();
+      },
+    );
+
+    this.addTextSetting(
+      "별점 섹션 제목",
+      "교사용 별점모드 섹션 제목입니다.",
+      settings.teacherPage.starLedgerTitle,
+      async (value) => {
+        settings.teacherPage.starLedgerTitle = value.trim() || DEFAULT_SETTINGS.teacherPage.starLedgerTitle;
         await this.plugin.saveSettings();
       },
     );
@@ -1065,6 +1873,18 @@ class ClassPageSettingTab extends PluginSettingTab {
         await this.plugin.saveSettings();
       },
       "classpage-data/lesson-summary.json",
+    );
+
+    this.addTextSetting(
+      "별점 JSON 경로",
+      "별점모드 ledger JSON 파일의 볼트 내부 경로입니다.",
+      settings.teacherPage.sources.starLedgerPath,
+      async (value) => {
+        settings.teacherPage.sources.starLedgerPath =
+          value.trim() || DEFAULT_SETTINGS.teacherPage.sources.starLedgerPath;
+        await this.plugin.saveSettings();
+      },
+      "classpage-data/star-ledger.json",
     );
   }
 
@@ -1173,14 +1993,17 @@ class ClassPageSettingTab extends PluginSettingTab {
   }
 }
 
-function formatDateLabel(value: string): string {
+function formatDateLabel(
+  value: string,
+  fallback = "집계 시각 미확인",
+): string {
   if (!value) {
-    return "집계 시각 없음";
+    return fallback;
   }
 
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return value;
+  if (Number.isNaN(date.getTime()) || isPlaceholderDate(date)) {
+    return fallback;
   }
 
   return new Intl.DateTimeFormat("ko-KR", {
@@ -1190,5 +2013,114 @@ function formatDateLabel(value: string): string {
 }
 
 function formatStudentLabel(student: { classroom: string; number: string; name: string }): string {
-  return [student.classroom, student.number, student.name].filter(Boolean).join(" ");
+  const label = [student.classroom, student.number, student.name]
+    .filter(Boolean)
+    .join(" ");
+  return label || "학생 미확인";
+}
+
+function isPlaceholderDate(date: Date): boolean {
+  return date.getTime() <= 0;
+}
+
+function formatSignedPoints(points: number): string {
+  const prefix = points > 0 ? "+" : "";
+  return `${prefix}${points}점`;
+}
+
+function getStarCategoryLabel(category: StarRuleSettings["category"]): string {
+  switch (category) {
+    case "attendance":
+      return "출결";
+    case "participation":
+      return "참여";
+    case "service":
+      return "역할";
+    case "adjustment":
+      return "조정";
+    default:
+      return "맞춤";
+  }
+}
+
+function getStarVisibilityLabel(visibility: StarRuleSettings["visibility"]): string {
+  return visibility === "teacher" ? "교사 전용" : "학생 공개";
+}
+
+function getStarSourceLabel(source: StarEvent["source"]): string {
+  switch (source) {
+    case "class-form":
+      return "학급용 폼";
+    case "lesson-form":
+      return "수업용 폼";
+    case "manual":
+      return "수동/일괄 조정";
+    default:
+      return "시스템";
+  }
+}
+
+function getStarEventSourceLabel(event: StarEvent): string {
+  if (event.source === "manual") {
+    return event.batchId ? "일괄 부여" : "수동 조정";
+  }
+
+  return getStarSourceLabel(event.source);
+}
+
+function getEnabledStarRules(rules: StarRuleSettings[]): StarRuleSettings[] {
+  return rules.filter((rule) => rule.enabled);
+}
+
+function hasAutomaticStarSource(sources: StarRuleSettings["sources"]): boolean {
+  return sources.some((source) =>
+    source === "class-form" || source === "lesson-form" || source === "system"
+  );
+}
+
+function getStarRuleSourceSummary(sources: StarRuleSettings["sources"]): string {
+  const labels = sources
+    .map((source) => getStarSourceLabel(source))
+    .filter((label, index, array) => array.indexOf(label) === index);
+
+  if (labels.length === 0) {
+    return "입력 경로 미확인";
+  }
+
+  return `입력 ${labels.join(", ")}`;
+}
+
+function getStarAutoCriteriaSummary(criteria: StarAutoCriteria | null): string {
+  if (!criteria) {
+    return "";
+  }
+
+  const parts: string[] = [];
+  if (criteria.assignmentStatusIn.length > 0) {
+    parts.push(`과제 ${criteria.assignmentStatusIn.join("/")}`);
+  }
+  if (criteria.minimumCorrectCount !== null) {
+    parts.push(`정답 ${criteria.minimumCorrectCount}개 이상`);
+  }
+  if (criteria.maximumIncorrectCount !== null) {
+    parts.push(`오답 ${criteria.maximumIncorrectCount}개 이하`);
+  }
+
+  return parts.length > 0 ? `조건 ${parts.join(" / ")}` : "";
+}
+
+function getAutomaticStarEventCount(summary: StarModeLedger["sourceSummary"]): number {
+  return summary["class-form"] + summary["lesson-form"] + summary.system;
+}
+
+function sortStarTotals(totals: StarStudentTotal[]): StarStudentTotal[] {
+  return totals.slice().sort((left, right) => {
+    if (right.visibleTotal !== left.visibleTotal) {
+      return right.visibleTotal - left.visibleTotal;
+    }
+    if (right.total !== left.total) {
+      return right.total - left.total;
+    }
+    return right.eventCount - left.eventCount;
+  });
 }

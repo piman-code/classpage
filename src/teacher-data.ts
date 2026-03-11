@@ -2,11 +2,13 @@ import { App, TFile, normalizePath } from "obsidian";
 import {
   normalizeClassSummaryAggregate,
   normalizeLessonSummaryAggregate,
+  normalizeStarModeLedger,
 } from "./defaults";
 import type {
   AggregateSourceState,
   ClassSummaryAggregate,
   LessonSummaryAggregate,
+  StarModeLedger,
   TeacherPageData,
   TeacherPageSettings,
 } from "./types";
@@ -15,31 +17,42 @@ export async function loadTeacherPageData(
   app: App,
   settings: TeacherPageSettings,
 ): Promise<TeacherPageData> {
-  const [classSummary, lessonSummary] = await Promise.all([
+  const [classSummary, lessonSummary, starLedger] = await Promise.all([
     loadAggregateFile<ClassSummaryAggregate>(
       app,
       "class",
       settings.sources.classSummaryPath,
+      "class-summary",
       normalizeClassSummaryAggregate,
     ),
     loadAggregateFile<LessonSummaryAggregate>(
       app,
       "lesson",
       settings.sources.lessonSummaryPath,
+      "lesson-summary",
       normalizeLessonSummaryAggregate,
+    ),
+    loadAggregateFile<StarModeLedger>(
+      app,
+      "star",
+      settings.sources.starLedgerPath,
+      "star-ledger",
+      normalizeStarModeLedger,
     ),
   ]);
 
   return {
     classSummary,
     lessonSummary,
+    starLedger,
   };
 }
 
 async function loadAggregateFile<T>(
   app: App,
-  kind: "class" | "lesson",
+  kind: "class" | "lesson" | "star",
   path: string,
+  expectedType: "class-summary" | "lesson-summary" | "star-ledger",
   parser: (value: unknown) => T,
 ): Promise<AggregateSourceState<T>> {
   const normalizedPath = normalizePath(path.trim());
@@ -60,7 +73,7 @@ async function loadAggregateFile<T>(
       kind,
       path: normalizedPath,
       status: "missing",
-      message: "설정된 경로에 JSON 파일이 없습니다. docs/BEGINNER_SETUP.md의 16단계를 확인하세요.",
+      message: "설정된 경로에 JSON 파일이 없습니다. docs/START_HERE.md와 docs/BEGINNER_SETUP.md의 16단계를 확인하세요.",
       data: null,
     };
   }
@@ -68,6 +81,13 @@ async function loadAggregateFile<T>(
   try {
     const raw = await app.vault.cachedRead(file);
     const parsed = JSON.parse(raw) as unknown;
+
+    if (!hasExpectedAggregateType(parsed, expectedType)) {
+      const actualType = getAggregateTypeLabel(parsed);
+      throw new Error(
+        `기대한 JSON 타입은 ${expectedType}인데 현재 파일은 ${actualType} 입니다.`,
+      );
+    }
 
     return {
       kind,
@@ -94,4 +114,26 @@ async function loadAggregateFile<T>(
       data: null,
     };
   }
+}
+
+function hasExpectedAggregateType(
+  value: unknown,
+  expectedType: "class-summary" | "lesson-summary" | "star-ledger",
+): boolean {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  return (value as { type?: unknown }).type === expectedType;
+}
+
+function getAggregateTypeLabel(value: unknown): string {
+  if (!value || typeof value !== "object") {
+    return "알 수 없는 형식";
+  }
+
+  const type = (value as { type?: unknown }).type;
+  return typeof type === "string" && type.trim().length > 0
+    ? type
+    : "type 없음";
 }

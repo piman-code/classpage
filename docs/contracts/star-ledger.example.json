@@ -1,0 +1,231 @@
+{
+  "type": "star-ledger",
+  "generatedAt": "2026-03-10T16:20:00+09:00",
+  "periodLabel": "2026-03-03 ~ 2026-03-10",
+  "excludedResponseCount": 3,
+  "eventCount": 21,
+  "source": {
+    "formName": "학급용/수업용 응답 + 별점 규칙",
+    "formUrl": "",
+    "sheetName": "학급용 응답, 수업용 응답, 별점 수동 조정",
+    "aggregatorNote": "Apps Script가 Google 로그인 이메일 기준으로 자동 적립과 수동/일괄 조정을 같은 이벤트 로그로 합쳐 ledger를 생성"
+  },
+  "sourceSummary": {
+    "manual": 4,
+    "class-form": 9,
+    "lesson-form": 8,
+    "system": 0
+  },
+  "rules": [
+    {
+      "ruleId": "arrival",
+      "label": "등교",
+      "category": "attendance",
+      "delta": 5,
+      "visibility": "student",
+      "description": "학급용 폼 제출 시 자동 적립",
+      "enabled": true,
+      "sources": ["class-form"],
+      "allowCustomDelta": false,
+      "autoCriteria": null
+    },
+    {
+      "ruleId": "attendance-check",
+      "label": "출석체크",
+      "category": "attendance",
+      "delta": 1,
+      "visibility": "student",
+      "description": "학급용 폼 제출 완료",
+      "enabled": true,
+      "sources": ["class-form"],
+      "allowCustomDelta": false,
+      "autoCriteria": null
+    },
+    {
+      "ruleId": "lesson-submit",
+      "label": "수업 제출",
+      "category": "participation",
+      "delta": 1,
+      "visibility": "student",
+      "description": "수업용 폼 제출 완료",
+      "enabled": true,
+      "sources": ["lesson-form"],
+      "allowCustomDelta": false,
+      "autoCriteria": null
+    },
+    {
+      "ruleId": "assignment-complete",
+      "label": "과제 완료",
+      "category": "participation",
+      "delta": 1,
+      "visibility": "student",
+      "description": "수업용 폼의 과제 수행 정도가 완료로 분류되면 자동 적립",
+      "enabled": true,
+      "sources": ["lesson-form"],
+      "allowCustomDelta": false,
+      "autoCriteria": {
+        "assignmentStatusIn": ["완료"],
+        "minimumCorrectCount": null,
+        "maximumIncorrectCount": null
+      }
+    },
+    {
+      "ruleId": "no-incorrect",
+      "label": "오답 없음",
+      "category": "participation",
+      "delta": 1,
+      "visibility": "student",
+      "description": "수업용 폼에서 과제 완료이고 오답이 없으면 자동 적립",
+      "enabled": true,
+      "sources": ["lesson-form"],
+      "allowCustomDelta": false,
+      "autoCriteria": {
+        "assignmentStatusIn": ["완료"],
+        "minimumCorrectCount": 1,
+        "maximumIncorrectCount": 0
+      }
+    },
+    {
+      "ruleId": "manual-praise",
+      "label": "수동 칭찬",
+      "category": "service",
+      "delta": 2,
+      "visibility": "student",
+      "description": "교사가 공개 가점을 수동으로 부여",
+      "enabled": true,
+      "sources": ["manual"],
+      "allowCustomDelta": true,
+      "autoCriteria": null
+    },
+    {
+      "ruleId": "teacher-adjustment",
+      "label": "교사 전용 조정",
+      "category": "adjustment",
+      "delta": -2,
+      "visibility": "teacher",
+      "description": "지각, 반복 미제출 등 교사 내부 조정",
+      "enabled": true,
+      "sources": ["manual"],
+      "allowCustomDelta": true,
+      "autoCriteria": null
+    }
+  ],
+  "totals": [
+    {
+      "studentKey": "email-sha256|9f4c2d6a1b7e3c5d9a2f4b6c",
+      "student": {
+        "classroom": "3-2",
+        "number": "01",
+        "name": "학생A"
+      },
+      "total": 14,
+      "visibleTotal": 16,
+      "hiddenAdjustmentTotal": -2,
+      "eventCount": 6
+    },
+    {
+      "studentKey": "email-sha256|3a7d9c2e4f6b1a8c5d2e7f4a",
+      "student": {
+        "classroom": "3-2",
+        "number": "12",
+        "name": "학생B"
+      },
+      "total": 13,
+      "visibleTotal": 13,
+      "hiddenAdjustmentTotal": 0,
+      "eventCount": 4
+    }
+  ],
+  "recentEvents": [
+    {
+      "id": "class-form|arrival|2026-03-10|email-sha256|9f4c2d6a1b7e3c5d9a2f4b6c",
+      "studentKey": "email-sha256|9f4c2d6a1b7e3c5d9a2f4b6c",
+      "student": {
+        "classroom": "3-2",
+        "number": "01",
+        "name": "학생A"
+      },
+      "ruleId": "arrival",
+      "category": "attendance",
+      "delta": 5,
+      "visibility": "student",
+      "source": "class-form",
+      "occurredAt": "2026-03-10T08:12:00+09:00",
+      "note": "학급용 폼 제출 시 자동 적립",
+      "actor": "",
+      "batchId": ""
+    },
+    {
+      "id": "lesson-form|assignment-complete|2026-03-10|1교시|수학|email-sha256|9f4c2d6a1b7e3c5d9a2f4b6c",
+      "studentKey": "email-sha256|9f4c2d6a1b7e3c5d9a2f4b6c",
+      "student": {
+        "classroom": "3-2",
+        "number": "01",
+        "name": "학생A"
+      },
+      "ruleId": "assignment-complete",
+      "category": "participation",
+      "delta": 1,
+      "visibility": "student",
+      "source": "lesson-form",
+      "occurredAt": "2026-03-10T09:45:00+09:00",
+      "note": "수업용 폼의 과제 수행 정도가 완료로 분류되면 자동 적립",
+      "actor": "",
+      "batchId": ""
+    },
+    {
+      "id": "lesson-form|no-incorrect|2026-03-10|1교시|수학|email-sha256|9f4c2d6a1b7e3c5d9a2f4b6c",
+      "studentKey": "email-sha256|9f4c2d6a1b7e3c5d9a2f4b6c",
+      "student": {
+        "classroom": "3-2",
+        "number": "01",
+        "name": "학생A"
+      },
+      "ruleId": "no-incorrect",
+      "category": "participation",
+      "delta": 1,
+      "visibility": "student",
+      "source": "lesson-form",
+      "occurredAt": "2026-03-10T09:45:00+09:00",
+      "note": "수업용 폼에서 과제 완료이고 오답이 없으면 자동 적립",
+      "actor": "",
+      "batchId": ""
+    },
+    {
+      "id": "manual|manual-praise|2026-03-10-1교시-칭찬|email-sha256|3a7d9c2e4f6b1a8c5d2e7f4a",
+      "studentKey": "email-sha256|3a7d9c2e4f6b1a8c5d2e7f4a",
+      "student": {
+        "classroom": "3-2",
+        "number": "12",
+        "name": "학생B"
+      },
+      "ruleId": "manual-praise",
+      "category": "service",
+      "delta": 3,
+      "visibility": "student",
+      "source": "manual",
+      "occurredAt": "2026-03-10T09:00:00+09:00",
+      "note": "친구 도움 칭찬",
+      "actor": "담임",
+      "batchId": "2026-03-10-1교시-칭찬"
+    },
+    {
+      "id": "manual|teacher-adjustment|2026-03-10-지각조정|email-sha256|9f4c2d6a1b7e3c5d9a2f4b6c",
+      "studentKey": "email-sha256|9f4c2d6a1b7e3c5d9a2f4b6c",
+      "student": {
+        "classroom": "3-2",
+        "number": "01",
+        "name": "학생A"
+      },
+      "ruleId": "teacher-adjustment",
+      "category": "adjustment",
+      "delta": -2,
+      "visibility": "teacher",
+      "source": "manual",
+      "occurredAt": "2026-03-10T09:00:00+09:00",
+      "note": "교사용 내부 조정 예시",
+      "actor": "담임",
+      "batchId": "2026-03-10-지각조정"
+    }
+  ]
+}

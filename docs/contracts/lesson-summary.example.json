@@ -8,9 +8,9 @@
   "excludedResponseCount": 1,
   "source": {
     "formName": "수업용 Google Form",
-    "formUrl": "https://docs.google.com/forms/d/e/1FAIpQLSefjZ3vyJs6T5PkkrUQDo2JY1wNh8cHPdeieRWRFVsMzu-_NA/viewform?usp=header",
+    "formUrl": "https://docs.google.com/forms/d/e/1FAIpQLSeeKvU6VCMpItqXMEPiGVHJ5RW27FFur6_LbmFcBSqpxg-ujw/viewform?usp=header",
     "sheetName": "수업용 응답",
-    "aggregatorNote": "Apps Script가 Google Sheets 응답과 허가 학생 명단 시트를 대조해 수업 요약 JSON으로 변환"
+    "aggregatorNote": "Apps Script가 Google 로그인 이메일 기준으로 수업 응답을 정리해 수업 요약 JSON으로 변환"
   },
   "overview": {
     "averageCorrectCount": 6.8,
@@ -41,13 +41,13 @@
       "student": {
         "classroom": "3-2",
         "number": "03",
-        "name": "박민준"
+        "name": "학생C"
       },
       "correctCount": 3,
       "incorrectCount": 5,
       "misconception": "전압과 전류를 혼동함",
       "assignmentStatus": "부분 완료",
-      "teacherNote": "다음 시간 시작 전 1:1 확인"
+      "teacherNote": "교사용 내부 메모 예시"
     }
   ],
   "studentResults": [
@@ -55,7 +55,7 @@
       "student": {
         "classroom": "3-2",
         "number": "03",
-        "name": "박민준"
+        "name": "학생C"
       },
       "correctCount": 3,
       "incorrectCount": 5,
@@ -66,12 +66,70 @@
       "student": {
         "classroom": "3-2",
         "number": "12",
-        "name": "이서준"
+        "name": "학생B"
       },
       "correctCount": 8,
       "incorrectCount": 1,
       "assignmentStatus": "완료",
       "followUp": "심화 문제 제공 가능"
+    }
+  ],
+  "studentResponses": [
+    {
+      "student": {
+        "classroom": "3-2",
+        "number": "03",
+        "name": "학생C"
+      },
+      "lessonUnit": "전류와 전압",
+      "correctCount": 3,
+      "incorrectCount": 5,
+      "assignmentStatus": "부분 완료",
+      "incorrectReason": "전압과 전류를 같은 뜻으로 적음",
+      "teacherMessage": "직렬 연결 계산이 아직 헷갈립니다.",
+      "misconception": "전압과 전류를 혼동함",
+      "followUp": "개념 1 재설명 필요",
+      "teacherNote": "자동 분석 메모 예시",
+      "concepts": [
+        {
+          "concept": "전류와 전압의 차이",
+          "understanding": "1",
+          "understandingLabel": "낮음"
+        },
+        {
+          "concept": "직렬 연결 계산",
+          "understanding": "2",
+          "understandingLabel": "보통"
+        }
+      ]
+    },
+    {
+      "student": {
+        "classroom": "3-2",
+        "number": "12",
+        "name": "학생B"
+      },
+      "lessonUnit": "전류와 전압",
+      "correctCount": 8,
+      "incorrectCount": 1,
+      "assignmentStatus": "완료",
+      "incorrectReason": "직렬 연결 공식에서 한 문제 실수",
+      "teacherMessage": "직렬 연결 계산은 거의 이해했습니다.",
+      "misconception": "직렬 연결 계산",
+      "followUp": "심화 문제 제공 가능",
+      "teacherNote": "자동 분석 메모 예시",
+      "concepts": [
+        {
+          "concept": "전류와 전압의 차이",
+          "understanding": "3",
+          "understandingLabel": "높음"
+        },
+        {
+          "concept": "직렬 연결 계산",
+          "understanding": "2",
+          "understandingLabel": "보통"
+        }
+      ]
     }
   ]
 }

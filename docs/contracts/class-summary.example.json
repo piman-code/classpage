@@ -7,9 +7,9 @@
   "excludedResponseCount": 2,
   "source": {
     "formName": "학급용 Google Form",
-    "formUrl": "https://docs.google.com/forms/d/e/1FAIpQLSeBR_cBQFf_CXo6ytCabIMfvStXn_QPSYadonYLKNR6WAT2bg/viewform?usp=header",
+    "formUrl": "https://docs.google.com/forms/d/e/1FAIpQLSdBmPO3TZyp6jxjVgnXfSgypR0AzSC2yjSc9mRg7kjByPaLYA/viewform?usp=header",
     "sheetName": "학급용 응답",
-    "aggregatorNote": "Apps Script가 Google Sheets 응답과 허가 학생 명단 시트를 대조해 학급 요약 JSON으로 변환"
+    "aggregatorNote": "Apps Script가 Google 로그인 이메일 기준으로 학급 응답을 정리해 학급 요약 JSON으로 변환"
   },
   "emotionSummary": [
     { "label": "안정", "count": 14, "note": "전반적으로 안정적" },
@@ -26,13 +26,13 @@
       "student": {
         "classroom": "3-2",
         "number": "07",
-        "name": "김하늘"
+        "name": "학생A"
       },
       "mood": "불안",
       "reason": "발표 순서가 걱정된다고 적음",
       "goal": "준비물 빠짐없이 챙기기",
       "yesterdayAchievement": "미달",
-      "teacherNote": "등교 직후 짧게 확인 필요"
+      "teacherNote": "교사용 내부 메모 예시"
     }
   ],
   "praiseCandidates": [
@@ -40,10 +40,46 @@
       "student": {
         "classroom": "3-2",
         "number": "12",
-        "name": "이서준"
+        "name": "학생B"
       },
       "reason": "친구의 준비물 정리를 도와줌",
-      "mentionedPeer": "김하늘"
+      "mentionedPeer": "학생A"
+    }
+  ],
+  "studentResponses": [
+    {
+      "student": {
+        "classroom": "3-2",
+        "number": "07",
+        "name": "학생A"
+      },
+      "mood": "불안",
+      "emotionLabel": "불안",
+      "moodReason": "발표 순서가 걱정된다고 적음",
+      "goal": "준비물 빠짐없이 챙기기",
+      "yesterdayAchievement": "미달",
+      "goalLabel": "미달",
+      "teacherMessage": "오늘 발표 전에 한 번 더 확인받고 싶어요.",
+      "helpedFriend": "",
+      "helpedByFriend": "친구가 준비물을 함께 챙겨줌",
+      "teacherNote": "자동 분석 메모 예시"
+    },
+    {
+      "student": {
+        "classroom": "3-2",
+        "number": "12",
+        "name": "학생B"
+      },
+      "mood": "좋음",
+      "emotionLabel": "안정",
+      "moodReason": "친구와 같이 준비를 마쳐서 편안함",
+      "goal": "과학 준비물 점검하기",
+      "yesterdayAchievement": "달성",
+      "goalLabel": "달성",
+      "teacherMessage": "",
+      "helpedFriend": "친구 준비물 정리를 도와줌",
+      "helpedByFriend": "",
+      "teacherNote": ""
     }
   ]
 }

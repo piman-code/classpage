@@ -1,6 +1,6 @@
 {
   "name": "classpage",
-  "version": "0.2.2",
+  "version": "0.3.0",
   "description": "A lightweight Obsidian class page plugin for classroom operations.",
   "private": true,
   "type": "module",

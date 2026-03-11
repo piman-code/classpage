@@ -1,4 +1,8 @@
 node_modules/
 dist/
 main.js.map
-
+.DS_Store
+classpage-data/
+*.log
+automation/mac/*.plist
+automation/mac/*-local.sh

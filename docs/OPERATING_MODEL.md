@@ -1,7 +1,6 @@
 # classpage 운영 구조
 
-처음 세팅을 직접 따라 해야 한다면 [docs/BEGINNER_SETUP.md](/Users/hangbokee/classpage/docs/BEGINNER_SETUP.md)를 먼저 보고,  
-이 문서는 구조와 책임 분리를 이해하는 용도로 보는 것을 권장합니다.
+처음 세팅을 직접 따라 해야 한다면 [docs/START_HERE.md](/Users/hangbokee/classpage/docs/START_HERE.md)와 [docs/BEGINNER_SETUP.md](/Users/hangbokee/classpage/docs/BEGINNER_SETUP.md)를 먼저 보고, 이 문서는 구조와 책임 분리를 이해하는 용도로 보는 것을 권장합니다.
 
 ## 1. 전체 구조 요약
 
@@ -12,7 +11,7 @@
 2. 교사용 페이지
    교사가 보는 화면입니다. 이미 계산된 요약 결과만 빠르게 확인합니다.
 3. 집계 레이어
-   Google Sheets / Apps Script / 외부 자동화가 학생 응답을 허가 학생 명단과 대조한 뒤 요약 JSON으로 변환합니다.
+   Google Sheets / Apps Script / 외부 자동화가 학생 응답을 로그인 이메일 기준으로 정리하고, 필요하면 allowlist로 보완한 뒤 요약 JSON과 별점 ledger로 변환합니다.
 4. 표시 레이어
    classpage가 JSON 파일을 읽어 요약 카드와 목록으로 보여줍니다.
 
@@ -20,7 +19,8 @@
 
 - 수집은 Google Form
 - 원본 저장은 Google Sheets
-- 검증은 allowlist 시트와 이메일 대조
+- 기본 식별은 Google 로그인 이메일
+- 선택 보완은 allowlist
 - 계산은 Apps Script 또는 외부 자동화
 - 표시는 classpage
 
@@ -30,9 +30,9 @@
 
 1. 학생이 학급용 Google Form을 제출합니다.
 2. 응답이 Google Sheets에 쌓입니다.
-3. Apps Script가 응답 이메일을 허가 학생 명단과 대조합니다.
-4. 허가된 응답만으로 정서 상태, 목표 달성 정도, 도움이 필요한 학생, 칭찬 후보를 계산합니다.
-5. 제외된 응답 수는 최소 정보로만 남깁니다.
+3. Apps Script가 로그인 이메일 기준으로 학생을 식별합니다.
+4. 필요하면 allowlist로 표시용 반/번호/이름을 보완합니다.
+5. 정서 상태, 목표 달성 정도, 도움이 필요한 학생, 칭찬 후보를 계산합니다.
 6. 결과를 `class-summary.json`으로 만듭니다.
 7. JSON 파일이 Obsidian 볼트의 `classpage-data/class-summary.json`에 들어오면 classpage가 표시합니다.
 
@@ -40,11 +40,21 @@
 
 1. 학생이 수업용 Google Form을 제출합니다.
 2. 응답이 Google Sheets에 쌓입니다.
-3. Apps Script가 응답 이메일을 허가 학생 명단과 대조합니다.
-4. 허가된 응답만으로 어려워한 개념, 정오답 현황, 과제 수행 정도, 보충 지도 필요 학생을 계산합니다.
-5. 제외된 응답 수는 최소 정보로만 남깁니다.
+3. Apps Script가 로그인 이메일 기준으로 학생을 식별합니다.
+4. 필요하면 allowlist로 표시용 반/번호/이름을 보완합니다.
+5. 어려워한 개념, 정오답 현황, 과제 수행 정도, 보충 지도 필요 학생을 계산합니다.
 6. 결과를 `lesson-summary.json`으로 만듭니다.
 7. JSON 파일이 Obsidian 볼트의 `classpage-data/lesson-summary.json`에 들어오면 classpage가 표시합니다.
+
+### 별점모드
+
+1. 학급용 폼과 수업용 폼 응답이 Google Sheets에 쌓입니다.
+2. Apps Script가 로그인 이메일 기준으로 학생을 식별합니다.
+3. 필요하면 allowlist로 표시용 정보를 보완한 뒤 이벤트 로그로 변환합니다.
+4. 학급용 폼 제출은 `등교 +5`, `출석체크 +1`을 자동 적립합니다.
+5. 수업용 폼 제출은 `수업 제출 +1`을 자동 적립합니다.
+6. 필요하면 교사 수동 조정 시트를 읽어 교사 전용 조정을 합칩니다.
+7. 결과를 `star-ledger.json`으로 만들고 classpage가 교사용 화면에서 읽습니다.
 
 ## 3. 학생용 페이지 구조
 
@@ -55,6 +65,7 @@
 - 공지사항
 - 학급용 Google Form 버튼
 - 수업용 Google Form 버튼
+- 공개 가능한 별점/칭찬 안내는 현재 학생용 자동 출력 대신 공유 템플릿으로 별도 운영
 
 여기에는 학생 응답 데이터가 직접 들어오지 않습니다.
 
@@ -62,14 +73,25 @@
 
 교사용 페이지는 집계 결과 화면입니다.
 
+- 상단 상태 카드
+  학급 / 수업 / 별점 연결 상태와 최근 집계 유무를 먼저 확인하고, 카드를 눌러 해당 영역만 볼 수 있음
 - 집계 연결 상태
-  어느 JSON 경로를 읽는지, 파일이 있는지, 언제 집계됐는지 확인
+  구조와 파일 경로는 필요할 때만 아래 고급 정보에서 확인
 - 학급용 폼 집계
   정서 상태, 목표 달성 분포, 도움이 필요한 학생, 칭찬/격려 후보
 - 수업용 폼 집계
   어려워한 개념, 과제 수행 분포, 보충 지도 필요 학생, 학생별 정오답/과제 현황
+- 별점모드
+  기본 연결 상태, 최근 이벤트, 학생별 누적 점수, 학생 공개 점수와 교사 전용 조정 구분
 
 교사용 페이지는 원문 응답을 직접 나열하지 않고, 판단에 필요한 요약 중심으로 구성합니다.
+다만 drill-down이 필요한 카드에서는 최신 학생 응답 스냅샷을 함께 읽어, 학생 목록과 근거를 단계적으로 펼쳐 볼 수 있습니다.
+
+중요:
+
+- `class-summary.json`, `lesson-summary.json`, `star-ledger.json`은 교사용 내부용 산출물입니다.
+- `class-summary.json`, `lesson-summary.json`의 `studentResponses`는 교사용 drill-down용 최신 응답 스냅샷입니다.
+- 학생 공개용 안내는 raw JSON을 그대로 보여주지 말고 공개 가능한 값만 따로 추려서 공유하는 편이 안전합니다.
 
 ## 5. 집계 레이어에서 계산할 항목
 
@@ -88,6 +110,13 @@
 - 보충 지도가 필요한 학생 목록
 - 학생별 정오답 및 과제 현황
 
+### 별점모드 집계
+
+- 자동 적립 이벤트 생성
+- 학생별 누적 점수 계산
+- 학생 공개 점수 / 교사 전용 조정 분리
+- 최근 이벤트 정렬
+
 ## 6. classpage에서 표시만 할 항목
 
 classpage는 아래를 계산하지 않고 표시만 합니다.
@@ -101,8 +130,13 @@ classpage는 아래를 계산하지 않고 표시만 합니다.
 - 과제 수행 정도
 - 도움이 필요한 학생
 - 칭찬/격려 후보
+- 별점모드 최근 이벤트
+- 학생별 공개 점수 / 교사 전용 조정 합계
+- drill-down용 학생 최신 응답 스냅샷
 
 이 값들은 모두 외부 집계 JSON 결과여야 합니다.
+
+이때 raw JSON 전체를 학생에게 그대로 공유하지 않는 것이 중요합니다.
 
 ## 7. 설정 포인트 목록
 
@@ -116,8 +150,10 @@ classpage는 아래를 계산하지 않고 표시만 합니다.
 - 학급용 폼 링크 / 버튼 문구
 - 수업용 폼 링크 / 버튼 문구
 - 교사용 페이지 제목 / 설명 / 상태 문구
+- 별점 섹션 제목
 - 학급 집계 JSON 경로
 - 수업 집계 JSON 경로
+- 별점 JSON 경로
 
 ### 사용자 입력 원본
 
@@ -130,6 +166,7 @@ classpage 설정에서 직접 바꾸지 않습니다.
 
 - `class-summary.json`
 - `lesson-summary.json`
+- `star-ledger.json`
 
 이 파일 내용을 바꾸면 교사용 화면 내용이 바뀝니다.
 
@@ -159,7 +196,7 @@ classpage 설정에서 직접 바꾸지 않습니다.
 - [automation/apps-script/Config.gs](/Users/hangbokee/classpage/automation/apps-script/Config.gs)
   Apps Script 집계 규칙과 시트/출력 설정
 - [automation/apps-script/Code.gs](/Users/hangbokee/classpage/automation/apps-script/Code.gs)
-  학급용/수업용 JSON 생성기
+  학급용/수업용/별점 JSON 생성기
 
 ## 10. 현재 의도적으로 넣지 않은 기능
 
@@ -170,10 +207,10 @@ classpage 설정에서 직접 바꾸지 않습니다.
 
 ## 11. 다음 단계 제안
 
-가장 자연스러운 다음 단계는 다음 셋 중 하나입니다.
+가장 자연스러운 다음 단계는 [docs/NEXT_STAGE_ROADMAP.md](/Users/hangbokee/classpage/docs/NEXT_STAGE_ROADMAP.md)에 맞춰 아래 순서로 보는 것이 적절합니다.
 
-1. Apps Script 결과를 Obsidian 볼트 안으로 가져오는 마지막 동기화 단계 붙이기
-2. 교사용 화면에 날짜/반/교시 필터를 얇게 추가하기
-3. 집계 규칙을 실제 운영 기록에 맞게 조금씩 조정하기
+1. 학생 공개용 공지/별점 안내를 얇은 공유 템플릿에서 시작하기
+2. 교사용 화면의 학급 관리와 수업 관리를 더 분리된 흐름으로 다듬기
+3. Apps Script 결과를 Obsidian 볼트 안으로 가져오는 마지막 동기화 단계를 운영 환경에 맞게 붙이기
 
 첫 단계에서는 수집-집계-표시의 분리를 유지하는 것이 가장 중요합니다.

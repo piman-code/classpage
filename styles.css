@@ -53,6 +53,10 @@
   border: 1px solid rgba(255, 255, 255, 0.18);
 }
 
+.classpage-header__top > * {
+  min-width: 0;
+}
+
 .classpage-mode-toggle {
   display: inline-flex;
   gap: 0.35rem;
@@ -63,9 +67,12 @@
 }
 
 .classpage-mode-toggle__button {
+  appearance: none;
+  -webkit-appearance: none;
   border: 0;
   background: transparent;
   color: rgba(248, 251, 255, 0.82);
+  font: inherit;
   min-height: 34px;
   padding: 0.45rem 0.9rem;
   border-radius: 999px;
@@ -140,6 +147,7 @@
 
 .classpage-board,
 .classpage-form-grid,
+.classpage-dashboard-grid,
 .classpage-source-grid,
 .classpage-summary-grid,
 .classpage-stat-grid {
@@ -148,8 +156,12 @@
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
+.classpage-dashboard-grid {
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+}
+
 .classpage-stat-grid {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
 }
 
 .classpage-list {
@@ -186,6 +198,83 @@
   display: grid;
   gap: 0.8rem;
   align-content: start;
+}
+
+.classpage-dashboard-card {
+  appearance: none;
+  -webkit-appearance: none;
+  display: grid;
+  gap: 0.5rem;
+  width: 100%;
+  min-width: 0;
+  border: 1px solid var(--background-modifier-border);
+  background: var(--background-primary);
+  color: var(--text-normal);
+  font: inherit;
+  box-sizing: border-box;
+  padding: 1rem 1.05rem;
+  text-align: left;
+  align-content: start;
+  cursor: pointer;
+}
+
+.classpage-dashboard-card:hover {
+  border-color: rgba(53, 104, 173, 0.34);
+}
+
+.classpage-dashboard-card:focus-visible,
+.classpage-mode-toggle__button:focus-visible,
+.classpage-accordion__summary:focus-visible,
+.classpage-student-drilldown__summary:focus-visible,
+.classpage-advanced__summary:focus-visible {
+  outline: 2px solid var(--interactive-accent);
+  outline-offset: 2px;
+}
+
+.classpage-dashboard-card.is-active {
+  border-color: rgba(53, 104, 173, 0.6);
+  box-shadow: 0 14px 30px rgba(53, 104, 173, 0.12);
+}
+
+.classpage-dashboard-card__header {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.classpage-dashboard-card__header > * {
+  min-width: 0;
+}
+
+.classpage-dashboard-card__label {
+  font-size: 0.95rem;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+.classpage-dashboard-card__value {
+  display: block;
+  font-size: 1.55rem;
+  line-height: 1.05;
+  overflow-wrap: anywhere;
+}
+
+.classpage-dashboard-card__meta,
+.classpage-dashboard-card__hint {
+  margin: 0;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.classpage-dashboard-card__meta {
+  color: var(--text-normal);
+}
+
+.classpage-dashboard-card__hint {
+  color: var(--text-muted);
+  font-size: 0.9rem;
 }
 
 .classpage-form-card__description,
@@ -236,6 +325,7 @@
 .classpage-source-card__header,
 .classpage-detail-list__header {
   display: flex;
+  flex-wrap: wrap;
   gap: 0.6rem;
   align-items: flex-start;
   justify-content: space-between;
@@ -249,6 +339,12 @@
   border-radius: 999px;
   font-size: 0.8rem;
   font-weight: 700;
+  line-height: 1.25;
+  max-width: 100%;
+}
+
+.classpage-source-status {
+  white-space: normal;
 }
 
 .classpage-source-status--loaded {
@@ -360,8 +456,123 @@
   color: var(--text-muted);
 }
 
+.classpage-accordion-list,
+.classpage-drilldown-list {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.classpage-accordion,
+.classpage-student-drilldown {
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 14px;
+  background: var(--background-secondary);
+}
+
+.classpage-accordion.is-warning,
+.classpage-student-drilldown.is-warning {
+  border-color: rgba(217, 119, 6, 0.24);
+}
+
+.classpage-accordion.is-positive,
+.classpage-student-drilldown.is-positive {
+  border-color: rgba(22, 163, 74, 0.24);
+}
+
+.classpage-accordion[open],
+.classpage-student-drilldown[open] {
+  background: var(--background-primary);
+}
+
+.classpage-accordion__summary,
+.classpage-student-drilldown__summary,
+.classpage-advanced__summary {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.85rem;
+  align-items: start;
+  font: inherit;
+  color: inherit;
+  padding: 0.9rem 1rem;
+  cursor: pointer;
+  list-style: none;
+}
+
+.classpage-accordion__summary::-webkit-details-marker,
+.classpage-student-drilldown__summary::-webkit-details-marker,
+.classpage-advanced__summary::-webkit-details-marker {
+  display: none;
+}
+
+.classpage-accordion__summary::marker,
+.classpage-student-drilldown__summary::marker,
+.classpage-advanced__summary::marker {
+  content: "";
+}
+
+.classpage-accordion__summary::after,
+.classpage-student-drilldown__summary::after,
+.classpage-advanced__summary::after {
+  content: "";
+  width: 0.55rem;
+  height: 0.55rem;
+  margin-top: 0.35rem;
+  border-right: 2px solid var(--text-muted);
+  border-bottom: 2px solid var(--text-muted);
+  transform: rotate(45deg);
+  transition: transform 120ms ease;
+}
+
+.classpage-accordion[open] > .classpage-accordion__summary::after,
+.classpage-student-drilldown[open] > .classpage-student-drilldown__summary::after,
+.classpage-advanced[open] > .classpage-advanced__summary::after {
+  transform: rotate(-135deg);
+  margin-top: 0.55rem;
+}
+
+.classpage-accordion__summary-text,
+.classpage-student-drilldown__summary-text {
+  min-width: 0;
+  display: grid;
+  gap: 0.4rem;
+}
+
+.classpage-accordion > .classpage-drilldown-list,
+.classpage-accordion > .classpage-drilldown-empty,
+.classpage-student-drilldown > .classpage-drilldown-fields,
+.classpage-student-drilldown > .classpage-drilldown-empty {
+  margin: 0 1rem 1rem;
+}
+
+.classpage-drilldown-empty {
+  margin: 0;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+.classpage-drilldown-fields {
+  display: grid;
+  grid-template-columns: minmax(112px, auto) minmax(0, 1fr);
+  gap: 0.45rem 0.8rem;
+}
+
+.classpage-advanced {
+  padding: 1rem 1.1rem;
+}
+
+.classpage-advanced__summary {
+  font-weight: 700;
+}
+
+.classpage-advanced__content {
+  display: grid;
+  gap: 0.9rem;
+  margin-top: 0.9rem;
+}
+
 @media (max-width: 900px) {
-  .classpage-stat-grid {
+  .classpage-dashboard-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
@@ -373,6 +584,7 @@
 
   .classpage-board,
   .classpage-form-grid,
+  .classpage-dashboard-grid,
   .classpage-source-grid,
   .classpage-summary-grid,
   .classpage-stat-grid {
@@ -403,5 +615,9 @@
 
   .classpage-mode-toggle__button {
     flex: 1 1 0;
+  }
+
+  .classpage-drilldown-fields {
+    grid-template-columns: 1fr;
   }
 }
