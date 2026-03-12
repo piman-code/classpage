@@ -2,6 +2,7 @@
   "type": "star-ledger",
   "generatedAt": "2026-03-10T16:20:00+09:00",
   "periodLabel": "2026-03-03 ~ 2026-03-10",
+  "classroom": "3-2",
   "excludedResponseCount": 3,
   "eventCount": 21,
   "source": {
@@ -91,7 +92,7 @@
       "category": "service",
       "delta": 2,
       "visibility": "student",
-      "description": "교사가 공개 가점을 수동으로 부여",
+      "description": "선생님이 공개 가점을 수동으로 부여",
       "enabled": true,
       "sources": ["manual"],
       "allowCustomDelta": true,
@@ -99,15 +100,122 @@
     },
     {
       "ruleId": "teacher-adjustment",
-      "label": "교사 전용 조정",
+      "label": "선생님 전용 조정",
       "category": "adjustment",
       "delta": -2,
       "visibility": "teacher",
-      "description": "지각, 반복 미제출 등 교사 내부 조정",
+      "description": "지각, 반복 미제출 등 선생님 내부 조정",
       "enabled": true,
       "sources": ["manual"],
       "allowCustomDelta": true,
       "autoCriteria": null
+    }
+  ],
+  "ruleSummary": [
+    {
+      "ruleId": "attendance-check",
+      "label": "출석체크",
+      "category": "attendance",
+      "visibility": "student",
+      "eventCount": 5,
+      "manualCount": 0,
+      "automaticCount": 5,
+      "sourceSummary": {
+        "manual": 0,
+        "class-form": 5,
+        "lesson-form": 0,
+        "system": 0
+      }
+    },
+    {
+      "ruleId": "arrival",
+      "label": "등교",
+      "category": "attendance",
+      "visibility": "student",
+      "eventCount": 4,
+      "manualCount": 0,
+      "automaticCount": 4,
+      "sourceSummary": {
+        "manual": 0,
+        "class-form": 4,
+        "lesson-form": 0,
+        "system": 0
+      }
+    },
+    {
+      "ruleId": "lesson-submit",
+      "label": "수업 제출",
+      "category": "participation",
+      "visibility": "student",
+      "eventCount": 4,
+      "manualCount": 0,
+      "automaticCount": 4,
+      "sourceSummary": {
+        "manual": 0,
+        "class-form": 0,
+        "lesson-form": 4,
+        "system": 0
+      }
+    },
+    {
+      "ruleId": "assignment-complete",
+      "label": "복습/수행 완료",
+      "category": "participation",
+      "visibility": "student",
+      "eventCount": 3,
+      "manualCount": 0,
+      "automaticCount": 3,
+      "sourceSummary": {
+        "manual": 0,
+        "class-form": 0,
+        "lesson-form": 3,
+        "system": 0
+      }
+    },
+    {
+      "ruleId": "manual-praise",
+      "label": "수동 칭찬",
+      "category": "service",
+      "visibility": "student",
+      "eventCount": 2,
+      "manualCount": 2,
+      "automaticCount": 0,
+      "sourceSummary": {
+        "manual": 2,
+        "class-form": 0,
+        "lesson-form": 0,
+        "system": 0
+      }
+    },
+    {
+      "ruleId": "teacher-adjustment",
+      "label": "선생님 전용 조정",
+      "category": "adjustment",
+      "visibility": "teacher",
+      "eventCount": 2,
+      "manualCount": 2,
+      "automaticCount": 0,
+      "sourceSummary": {
+        "manual": 2,
+        "class-form": 0,
+        "lesson-form": 0,
+        "system": 0
+      }
+    },
+    {
+      "ruleId": "no-incorrect",
+      "label": "오답 없음",
+      "category": "participation",
+      "visibility": "student",
+      "eventCount": 1,
+      "manualCount": 0,
+      "automaticCount": 1,
+      "sourceSummary": {
+        "manual": 0,
+        "class-form": 0,
+        "lesson-form": 1,
+        "system": 0
+      }
     }
   ],
   "totals": [
@@ -223,7 +331,7 @@
       "visibility": "teacher",
       "source": "manual",
       "occurredAt": "2026-03-10T09:00:00+09:00",
-      "note": "교사용 내부 조정 예시",
+      "note": "선생님 내부 조정 예시",
       "actor": "담임",
       "batchId": "2026-03-10-지각조정"
     }

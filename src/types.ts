@@ -160,9 +160,42 @@ export interface LessonOverview {
   assignmentCompletionLabel: string;
 }
 
+export interface LessonGroupSummary {
+  groupKey: string;
+  lessonKey: string;
+  label: string;
+  lessonDate: string;
+  periodOrder: number | null;
+  subjectKey: string;
+  unitKey: string;
+  unitLabel: string;
+  periodLabel: string;
+  lessonUnit: string;
+  classroom: string;
+  subject: string;
+  responseCount: number;
+  excludedResponseCount: number;
+  overview: LessonOverview;
+  difficultConcepts: ConceptDifficulty[];
+  assignmentSummary: AggregateCountItem[];
+  supportStudents: LessonSupportStudent[];
+  studentResults: StudentResult[];
+  studentResponses: LessonStudentResponse[];
+}
+
+export interface LessonSubjectSummary extends LessonGroupSummary {
+  groups: LessonGroupSummary[];
+}
+
 export interface LessonSummaryAggregate {
   type: "lesson-summary";
   generatedAt: string;
+  lessonKey: string;
+  lessonDate: string;
+  periodOrder: number | null;
+  subjectKey: string;
+  unitKey: string;
+  unitLabel: string;
   periodLabel: string;
   classroom: string;
   subject: string;
@@ -175,6 +208,7 @@ export interface LessonSummaryAggregate {
   supportStudents: LessonSupportStudent[];
   studentResults: StudentResult[];
   studentResponses: LessonStudentResponse[];
+  subjectSummaries: LessonSubjectSummary[];
 }
 
 export type StarRuleCategory =
@@ -238,15 +272,28 @@ export interface StarEventSourceSummary {
   system: number;
 }
 
+export interface StarRuleEventSummary {
+  ruleId: string;
+  label: string;
+  category: StarRuleCategory;
+  visibility: StarVisibility;
+  eventCount: number;
+  manualCount: number;
+  automaticCount: number;
+  sourceSummary: StarEventSourceSummary;
+}
+
 export interface StarModeLedger {
   type: "star-ledger";
   generatedAt: string;
   periodLabel: string;
+  classroom?: string;
   excludedResponseCount: number;
   eventCount: number;
   source: AggregateSourceInfo;
   sourceSummary: StarEventSourceSummary;
   rules: StarRuleSettings[];
+  ruleSummary: StarRuleEventSummary[];
   totals: StarStudentTotal[];
   recentEvents: StarEvent[];
 }

@@ -109,6 +109,15 @@
   padding: 0 0.1rem;
 }
 
+.classpage-section__heading-row,
+.classpage-context-card__top {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+  align-items: center;
+  justify-content: space-between;
+}
+
 .classpage-section__title {
   margin: 0;
   font-size: 1rem;
@@ -121,14 +130,144 @@
   font-size: 0.92rem;
 }
 
+.classpage-context-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.28rem 0.62rem;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  line-height: 1.25;
+  color: var(--text-normal);
+  background: rgba(53, 104, 173, 0.12);
+  border: 1px solid rgba(53, 104, 173, 0.18);
+}
+
 .classpage-boundary-card,
 .classpage-basic-card,
 .classpage-form-card,
+.classpage-context-card,
 .classpage-source-card,
 .classpage-stat-card,
 .classpage-detail-card,
 .classpage-empty-card {
   padding: 1.1rem;
+}
+
+.classpage-context-card {
+  display: grid;
+  gap: 0.42rem;
+  background:
+    linear-gradient(135deg, rgba(53, 104, 173, 0.1), rgba(53, 104, 173, 0.03)),
+    var(--background-primary);
+  border-color: rgba(53, 104, 173, 0.18);
+}
+
+.classpage-context-card__eyebrow {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--text-muted);
+}
+
+.classpage-context-card__value {
+  font-size: clamp(1.45rem, 3vw, 2.05rem);
+  line-height: 1.08;
+  overflow-wrap: anywhere;
+}
+
+.classpage-context-card__meta,
+.classpage-context-card__description {
+  margin: 0;
+  line-height: 1.5;
+}
+
+.classpage-context-card__meta {
+  color: var(--text-normal);
+}
+
+.classpage-context-card__description {
+  color: var(--text-muted);
+}
+
+.classpage-filter-card {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.classpage-filter-card__description,
+.classpage-filter-toolbar__meta {
+  margin: 0;
+  line-height: 1.55;
+  color: var(--text-muted);
+}
+
+.classpage-filter-toolbar {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.classpage-filter-toolbar--lesson {
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  align-items: end;
+}
+
+.classpage-filter-toolbar--lesson .classpage-filter-toolbar__meta {
+  grid-column: 1 / -1;
+}
+
+.classpage-filter-toolbar--lesson .classpage-filter-toolbar__label--wide {
+  grid-column: 1 / -1;
+}
+
+.classpage-filter-toolbar__label {
+  display: grid;
+  gap: 0.35rem;
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--text-muted);
+}
+
+.classpage-filter-input-wrap {
+  min-width: 0;
+}
+
+.classpage-filter-input,
+.classpage-filter-select {
+  width: 100%;
+  min-height: 42px;
+  padding: 0.72rem 0.85rem;
+  border-radius: 12px;
+  border: 1px solid var(--background-modifier-border);
+  background: var(--background-secondary);
+  color: var(--text-normal);
+  font: inherit;
+  box-sizing: border-box;
+}
+
+.classpage-filter-pill-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.classpage-filter-pill {
+  appearance: none;
+  -webkit-appearance: none;
+  min-height: 38px;
+  padding: 0.55rem 0.85rem;
+  border-radius: 999px;
+  border: 1px solid var(--background-modifier-border);
+  background: var(--background-secondary);
+  color: var(--text-normal);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.classpage-filter-pill.is-active,
+.classpage-filter-pill.is-primary {
+  border-color: rgba(53, 104, 173, 0.34);
+  background: rgba(53, 104, 173, 0.12);
 }
 
 .classpage-card__title {
@@ -143,6 +282,18 @@
 .classpage-empty-card__detail {
   margin: 0 0 0.75rem;
   line-height: 1.58;
+}
+
+.classpage-empty-card__tips {
+  margin: 0 0 0.85rem;
+  padding-left: 1.15rem;
+  color: var(--text-muted);
+  display: grid;
+  gap: 0.35rem;
+}
+
+.classpage-empty-card__tip {
+  line-height: 1.5;
 }
 
 .classpage-board,
@@ -226,6 +377,7 @@
 
 .classpage-dashboard-card:focus-visible,
 .classpage-mode-toggle__button:focus-visible,
+.classpage-filter-pill:focus-visible,
 .classpage-accordion__summary:focus-visible,
 .classpage-student-drilldown__summary:focus-visible,
 .classpage-advanced__summary:focus-visible {
@@ -603,6 +755,7 @@
   .classpage-boundary-card,
   .classpage-basic-card,
   .classpage-form-card,
+  .classpage-context-card,
   .classpage-source-card,
   .classpage-stat-card,
   .classpage-detail-card,
@@ -611,6 +764,8 @@
   }
 
   .classpage-header__top,
+  .classpage-section__heading-row,
+  .classpage-context-card__top,
   .classpage-source-card__header,
   .classpage-detail-list__header {
     flex-direction: column;

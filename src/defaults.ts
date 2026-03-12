@@ -9,12 +9,16 @@ import type {
   ClassSummaryAggregate,
   ConceptDifficulty,
   LessonConceptResponse,
+  LessonGroupSummary,
+  LessonOverview,
+  LessonSubjectSummary,
   LessonSummaryAggregate,
   LessonSupportStudent,
   LessonStudentResponse,
   PraiseCandidate,
   StarAutoCriteria,
   StarEvent,
+  StarRuleEventSummary,
   StarEventSource,
   StarModeLedger,
   StarRuleSettings,
@@ -117,7 +121,7 @@ const DEFAULT_STAR_RULES: StarRuleSettings[] = [
     category: "service",
     delta: 2,
     visibility: "student",
-    description: "교사가 공개 가점을 수동으로 부여",
+    description: "선생님이 공개 가점을 수동으로 부여",
     enabled: true,
     sources: ["manual"],
     allowCustomDelta: true,
@@ -125,11 +129,11 @@ const DEFAULT_STAR_RULES: StarRuleSettings[] = [
   },
   {
     ruleId: "teacher-adjustment",
-    label: "교사 전용 조정",
+    label: "선생님 전용 조정",
     category: "adjustment",
     delta: -2,
     visibility: "teacher",
-    description: "교사 내부 조정용 기본 규칙",
+    description: "선생님 내부 조정용 기본 규칙",
     enabled: true,
     sources: ["manual"],
     allowCustomDelta: true,
@@ -175,18 +179,18 @@ export const DEFAULT_SETTINGS: ClassPageSettings = {
     },
   },
   teacherPage: {
-    title: "교사용 페이지",
-    description: "학급, 수업, 별점 상태를 빠르게 확인합니다.",
+    title: "선생님 페이지",
+    description: "학급, 수업, 별점 상태를 빠르게 확인하는 선생님용 화면입니다.",
     statusMessage: "상태 카드로 필요한 영역만 확인합니다.",
     classSummaryTitle: "학급용 폼 집계",
     lessonSummaryTitle: "수업용 폼 집계",
     starLedgerTitle: "별점모드",
     classSummaryEmptyMessage:
-      "학급용 집계 JSON을 찾지 못했습니다. docs/START_HERE.md의 연결 순서와 docs/BEGINNER_SETUP.md의 집계 연결 단계를 확인하세요.",
+      "학급 집계 파일이 아직 연결되지 않았습니다. 처음 연결 중이라면 정상입니다. 학급 집계를 한 번 생성한 뒤 class-summary.json 경로를 확인해 주세요.",
     lessonSummaryEmptyMessage:
-      "수업용 집계 JSON을 찾지 못했습니다. docs/START_HERE.md의 연결 순서와 docs/BEGINNER_SETUP.md의 집계 연결 단계를 확인하세요.",
+      "수업 집계 파일이 아직 연결되지 않았습니다. 처음 연결 중이라면 정상입니다. 수업 집계를 한 번 생성한 뒤 lesson-summary.json 경로를 확인해 주세요.",
     starLedgerEmptyMessage:
-      "별점모드 JSON을 찾지 못했습니다. docs/START_HERE.md와 Apps Script의 star-ledger.json 생성, JSON 경로 설정을 함께 확인하세요.",
+      "별점 집계 파일이 아직 연결되지 않았습니다. 처음 연결 중이라면 정상입니다. star-ledger.json 생성과 경로 설정을 함께 확인해 주세요.",
     sources: {
       classSummaryPath: "classpage-data/class-summary.json",
       lessonSummaryPath: "classpage-data/lesson-summary.json",
@@ -234,6 +238,47 @@ function normalizeItems(value: unknown, fallback: string[]): string[] {
 
 function normalizeNumber(value: unknown, fallback = 0): number {
   return Number.isFinite(value) ? Number(value) : fallback;
+}
+
+function normalizeOptionalNumber(value: unknown): number | null {
+  return Number.isFinite(value) ? Number(value) : null;
+}
+
+function buildLessonStructuredKeyPart(value: string): string {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, "-")
+    .replace(/[|/\\]+/g, "-");
+}
+
+function extractLessonDateFromLabel(value: string): string {
+  const match = value.match(/\d{4}-\d{2}-\d{2}/);
+  return match ? match[0] : "";
+}
+
+function extractLessonPeriodOrder(value: string): number | null {
+  const periodMatch = value.match(/(\d+)\s*교시/);
+  if (periodMatch) {
+    return Number(periodMatch[1]);
+  }
+
+  const numericMatch = value.match(/(\d+)/);
+  return numericMatch ? Number(numericMatch[1]) : null;
+}
+
+function buildLessonMachineKey(
+  lessonDate: string,
+  periodOrder: number | null,
+  subjectKey: string,
+  unitKey: string,
+): string {
+  return [
+    lessonDate || "date-missing",
+    periodOrder != null ? `p${periodOrder}` : "p0",
+    subjectKey || "subject-missing",
+    unitKey || "unit-missing",
+  ].join("|");
 }
 
 function normalizeSection(
@@ -555,6 +600,176 @@ function normalizeLessonStudentResponse(value: unknown): LessonStudentResponse {
   };
 }
 
+function normalizeLessonOverview(value: unknown): LessonOverview {
+  const overview = (value ?? {}) as Partial<LessonOverview>;
+
+  return {
+    averageCorrectCount: normalizeNumber(overview.averageCorrectCount),
+    averageIncorrectCount: normalizeNumber(overview.averageIncorrectCount),
+    assignmentCompletionLabel: normalizeOptionalStringWithFallback(
+      overview.assignmentCompletionLabel,
+      "미분류",
+    ),
+  };
+}
+
+function buildLessonGroupLabel(
+  subject: string,
+  periodLabel: string,
+  unitLabel: string,
+): string {
+  const parts = [subject, periodLabel];
+  if (unitLabel && !periodLabel.includes(unitLabel)) {
+    parts.push(unitLabel);
+  }
+
+  return parts.filter(Boolean).join(" · ") || "수업 그룹";
+}
+
+function normalizeLessonGroupSummary(value: unknown): LessonGroupSummary {
+  const summary = (value ?? {}) as Partial<LessonGroupSummary>;
+  const studentResponses = Array.isArray(summary.studentResponses)
+    ? summary.studentResponses.map((item) => normalizeLessonStudentResponse(item))
+    : [];
+  const periodLabel = normalizeString(summary.periodLabel, "응답 없음");
+  const subject = normalizeOptionalString(summary.subject);
+  const lessonUnit = normalizeOptionalString(summary.lessonUnit)
+    || studentResponses[0]?.lessonUnit
+    || "";
+  const unitLabel = normalizeOptionalString(summary.unitLabel) || lessonUnit;
+  const lessonDate = normalizeOptionalString(summary.lessonDate)
+    || extractLessonDateFromLabel(periodLabel);
+  const periodOrder = normalizeOptionalNumber(summary.periodOrder)
+    ?? extractLessonPeriodOrder(periodLabel);
+  const subjectKey = normalizeOptionalString(summary.subjectKey)
+    || buildLessonStructuredKeyPart(subject);
+  const unitKey = normalizeOptionalString(summary.unitKey)
+    || buildLessonStructuredKeyPart(unitLabel);
+  const lessonKey = normalizeOptionalString(summary.lessonKey)
+    || buildLessonMachineKey(lessonDate, periodOrder, subjectKey, unitKey);
+
+  return {
+    groupKey: normalizeOptionalString(summary.groupKey)
+      || [subject, periodLabel, lessonUnit].filter(Boolean).join("|"),
+    lessonKey,
+    label: normalizeOptionalString(summary.label)
+      || buildLessonGroupLabel(subject, periodLabel, unitLabel || lessonUnit),
+    lessonDate,
+    periodOrder,
+    subjectKey,
+    unitKey,
+    unitLabel,
+    periodLabel,
+    lessonUnit,
+    classroom: normalizeOptionalString(summary.classroom),
+    subject,
+    responseCount: normalizeNumber(summary.responseCount),
+    excludedResponseCount: normalizeNumber(summary.excludedResponseCount),
+    overview: normalizeLessonOverview(summary.overview),
+    difficultConcepts: Array.isArray(summary.difficultConcepts)
+      ? summary.difficultConcepts
+          .map((item) => normalizeConceptDifficulty(item))
+          .filter((item) => item.concept.length > 0)
+      : [],
+    assignmentSummary: normalizeCountItems(summary.assignmentSummary),
+    supportStudents: Array.isArray(summary.supportStudents)
+      ? summary.supportStudents.map((item) => normalizeLessonSupportStudent(item))
+      : [],
+    studentResults: Array.isArray(summary.studentResults)
+      ? summary.studentResults.map((item) => normalizeStudentResult(item))
+      : [],
+    studentResponses,
+  };
+}
+
+function compareLessonGroupsForDisplay(left: LessonGroupSummary, right: LessonGroupSummary): number {
+  if (left.lessonDate !== right.lessonDate) {
+    return right.lessonDate.localeCompare(left.lessonDate);
+  }
+
+  if ((left.periodOrder ?? -1) !== (right.periodOrder ?? -1)) {
+    return (right.periodOrder ?? -1) - (left.periodOrder ?? -1);
+  }
+
+  if (left.lessonKey !== right.lessonKey) {
+    return left.lessonKey.localeCompare(right.lessonKey);
+  }
+
+  return left.label.localeCompare(right.label);
+}
+
+function hasLessonGroupData(summary: LessonGroupSummary): boolean {
+  const meaningfulGroupKey = summary.groupKey.trim() !== ""
+    && summary.groupKey.trim() !== "응답 없음";
+  const meaningfulLabel = summary.label.trim() !== ""
+    && summary.label.trim() !== "수업 그룹"
+    && summary.label.trim() !== "응답 없음";
+  const meaningfulPeriodLabel = summary.periodLabel.trim() !== ""
+    && summary.periodLabel.trim() !== "응답 없음";
+
+  return [
+    meaningfulGroupKey ? summary.groupKey : "",
+    meaningfulLabel ? summary.label : "",
+    meaningfulPeriodLabel ? summary.periodLabel : "",
+    summary.lessonUnit,
+    summary.classroom,
+    summary.subject,
+  ].some((value) => value.trim().length > 0)
+    || summary.responseCount > 0
+    || summary.excludedResponseCount > 0
+    || summary.difficultConcepts.length > 0
+    || summary.assignmentSummary.length > 0
+    || summary.supportStudents.length > 0
+    || summary.studentResults.length > 0
+    || summary.studentResponses.length > 0;
+}
+
+function cloneLessonGroupSummary(summary: LessonGroupSummary): LessonGroupSummary {
+  return {
+    ...summary,
+    overview: { ...summary.overview },
+    difficultConcepts: summary.difficultConcepts.map((item) => ({ ...item })),
+    assignmentSummary: summary.assignmentSummary.map((item) => ({ ...item })),
+    supportStudents: summary.supportStudents.map((item) => ({
+      ...item,
+      student: { ...item.student },
+    })),
+    studentResults: summary.studentResults.map((item) => ({
+      ...item,
+      student: { ...item.student },
+    })),
+    studentResponses: summary.studentResponses.map((item) => ({
+      ...item,
+      student: { ...item.student },
+      concepts: item.concepts.map((concept) => ({ ...concept })),
+    })),
+  };
+}
+
+function normalizeLessonSubjectSummary(value: unknown): LessonSubjectSummary {
+  const summary = (value ?? {}) as Partial<LessonSubjectSummary>;
+  const baseGroup = normalizeLessonGroupSummary(summary);
+  const groups = Array.isArray(summary.groups)
+    ? summary.groups
+        .map((item) => normalizeLessonGroupSummary(item))
+        .filter((item) => hasLessonGroupData(item))
+        .sort((left, right) => compareLessonGroupsForDisplay(left, right))
+    : [];
+  const primaryGroup = hasLessonGroupData(baseGroup)
+    ? baseGroup
+    : groups[0] ?? baseGroup;
+  const normalizedGroups = groups.length > 0
+    ? groups
+    : hasLessonGroupData(primaryGroup)
+      ? [cloneLessonGroupSummary(primaryGroup)]
+      : [];
+
+  return {
+    ...cloneLessonGroupSummary(primaryGroup),
+    groups: normalizedGroups.map((item) => cloneLessonGroupSummary(item)),
+  };
+}
+
 function normalizeStarRule(value: unknown): StarRuleSettings {
   const rule = (value ?? {}) as Partial<StarRuleSettings> & Partial<{
     id: string;
@@ -702,6 +917,21 @@ function normalizeStarEventSourceSummary(value: unknown): StarModeLedger["source
   };
 }
 
+function normalizeStarRuleEventSummary(value: unknown): StarRuleEventSummary {
+  const summary = (value ?? {}) as Partial<StarRuleEventSummary>;
+
+  return {
+    ruleId: normalizeString(summary.ruleId, "unknown-rule"),
+    label: normalizeOptionalString(summary.label),
+    category: summary.category ?? "custom",
+    visibility: summary.visibility === "teacher" ? "teacher" : "student",
+    eventCount: normalizeNumber(summary.eventCount),
+    manualCount: normalizeNumber(summary.manualCount),
+    automaticCount: normalizeNumber(summary.automaticCount),
+    sourceSummary: normalizeStarEventSourceSummary(summary.sourceSummary),
+  };
+}
+
 export function normalizeClassSummaryAggregate(value: unknown): ClassSummaryAggregate {
   const summary = (value ?? {}) as Partial<ClassSummaryAggregate>;
 
@@ -732,42 +962,66 @@ export function normalizeClassSummaryAggregate(value: unknown): ClassSummaryAggr
 
 export function normalizeLessonSummaryAggregate(value: unknown): LessonSummaryAggregate {
   const summary = (value ?? {}) as Partial<LessonSummaryAggregate>;
+  const topLevelGroup = normalizeLessonGroupSummary(summary);
+  const subjectSummaries = Array.isArray(summary.subjectSummaries)
+    ? summary.subjectSummaries.map((item) => normalizeLessonSubjectSummary(item))
+    : [];
+  const sortedSubjectSummaries = subjectSummaries
+    .slice()
+    .sort((left, right) => compareLessonGroupsForDisplay(left, right));
 
   return {
     type: "lesson-summary",
     generatedAt: normalizeOptionalString(summary.generatedAt),
-    periodLabel: normalizeString(summary.periodLabel, "수업 집계"),
-    classroom: normalizeOptionalString(summary.classroom),
-    subject: normalizeOptionalString(summary.subject),
-    responseCount: normalizeNumber(summary.responseCount),
-    excludedResponseCount: normalizeNumber(summary.excludedResponseCount),
+    lessonKey: topLevelGroup.lessonKey,
+    lessonDate: topLevelGroup.lessonDate,
+    periodOrder: topLevelGroup.periodOrder,
+    subjectKey: topLevelGroup.subjectKey,
+    unitKey: topLevelGroup.unitKey,
+    unitLabel: topLevelGroup.unitLabel,
+    periodLabel: topLevelGroup.periodLabel,
+    classroom: topLevelGroup.classroom,
+    subject: topLevelGroup.subject,
+    responseCount: topLevelGroup.responseCount,
+    excludedResponseCount: topLevelGroup.excludedResponseCount,
     source: {
       ...DEFAULT_SOURCE_INFO,
       ...normalizeSourceInfo(summary.source),
     },
-    overview: {
-      averageCorrectCount: normalizeNumber(summary.overview?.averageCorrectCount),
-      averageIncorrectCount: normalizeNumber(summary.overview?.averageIncorrectCount),
-      assignmentCompletionLabel: normalizeOptionalStringWithFallback(
-        summary.overview?.assignmentCompletionLabel,
-        "미분류",
-      ),
-    },
-    difficultConcepts: Array.isArray(summary.difficultConcepts)
-      ? summary.difficultConcepts
-          .map((item) => normalizeConceptDifficulty(item))
-          .filter((item) => item.concept.length > 0)
-      : [],
-    assignmentSummary: normalizeCountItems(summary.assignmentSummary),
-    supportStudents: Array.isArray(summary.supportStudents)
-      ? summary.supportStudents.map((item) => normalizeLessonSupportStudent(item))
-      : [],
-    studentResults: Array.isArray(summary.studentResults)
-      ? summary.studentResults.map((item) => normalizeStudentResult(item))
-      : [],
-    studentResponses: Array.isArray(summary.studentResponses)
-      ? summary.studentResponses.map((item) => normalizeLessonStudentResponse(item))
-      : [],
+    overview: { ...topLevelGroup.overview },
+    difficultConcepts: topLevelGroup.difficultConcepts.map((item) => ({ ...item })),
+    assignmentSummary: topLevelGroup.assignmentSummary.map((item) => ({ ...item })),
+    supportStudents: topLevelGroup.supportStudents.map((item) => ({
+      ...item,
+      student: { ...item.student },
+    })),
+    studentResults: topLevelGroup.studentResults.map((item) => ({
+      ...item,
+      student: { ...item.student },
+    })),
+    studentResponses: topLevelGroup.studentResponses.map((item) => ({
+      ...item,
+      student: { ...item.student },
+      concepts: item.concepts.map((concept) => ({ ...concept })),
+    })),
+    subjectSummaries: sortedSubjectSummaries.length > 0
+      ? sortedSubjectSummaries
+      : buildLegacyLessonSubjectSummaries(
+          topLevelGroup.subject,
+          topLevelGroup.periodLabel,
+          topLevelGroup.classroom,
+          topLevelGroup.lessonDate,
+          topLevelGroup.periodOrder,
+          topLevelGroup.unitKey,
+          topLevelGroup.subjectKey,
+          topLevelGroup.unitLabel || topLevelGroup.lessonUnit,
+          topLevelGroup.overview,
+          topLevelGroup.difficultConcepts,
+          topLevelGroup.assignmentSummary,
+          topLevelGroup.supportStudents,
+          topLevelGroup.studentResults,
+          topLevelGroup.studentResponses,
+        ),
   };
 }
 
@@ -781,6 +1035,7 @@ export function normalizeStarModeLedger(value: unknown): StarModeLedger {
     type: "star-ledger",
     generatedAt: normalizeOptionalString(ledger.generatedAt),
     periodLabel: normalizeString(ledger.periodLabel, "전체 누적"),
+    classroom: normalizeOptionalString(ledger.classroom),
     excludedResponseCount: normalizeNumber(ledger.excludedResponseCount),
     eventCount: normalizeNumber(ledger.eventCount),
     source: {
@@ -791,6 +1046,9 @@ export function normalizeStarModeLedger(value: unknown): StarModeLedger {
     rules: rules.length > 0
       ? rules
       : DEFAULT_STAR_RULES.map((rule) => ({ ...rule })),
+    ruleSummary: Array.isArray(ledger.ruleSummary)
+      ? ledger.ruleSummary.map((item) => normalizeStarRuleEventSummary(item))
+      : [],
     totals: Array.isArray(ledger.totals)
       ? ledger.totals.map((item) => normalizeStarStudentTotal(item))
       : [],
@@ -798,4 +1056,80 @@ export function normalizeStarModeLedger(value: unknown): StarModeLedger {
       ? ledger.recentEvents.map((item) => normalizeStarEvent(item))
       : [],
   };
+}
+
+function buildLegacyLessonSubjectSummaries(
+  subject: string,
+  periodLabel: string,
+  classroom: string,
+  lessonDate: string,
+  periodOrder: number | null,
+  unitKey: string,
+  subjectKey: string,
+  unitLabel: string,
+  overview: LessonOverview,
+  difficultConcepts: ConceptDifficulty[],
+  assignmentSummary: AggregateCountItem[],
+  supportStudents: LessonSupportStudent[],
+  studentResults: StudentResult[],
+  studentResponses: LessonStudentResponse[],
+): LessonSubjectSummary[] {
+  const hasData = [
+    subject,
+    periodLabel,
+    classroom,
+  ].some((value) => value.trim().length > 0)
+    || studentResponses.length > 0
+    || studentResults.length > 0
+    || supportStudents.length > 0
+    || difficultConcepts.length > 0
+    || assignmentSummary.length > 0;
+
+  if (!hasData) {
+    return [];
+  }
+
+  const lessonUnit = studentResponses[0]?.lessonUnit || unitLabel;
+  const normalizedUnitLabel = unitLabel || lessonUnit;
+  const normalizedSubjectKey = subjectKey || buildLessonStructuredKeyPart(subject);
+  const normalizedUnitKey = unitKey || buildLessonStructuredKeyPart(normalizedUnitLabel);
+  const lessonKey = buildLessonMachineKey(
+    lessonDate || extractLessonDateFromLabel(periodLabel),
+    periodOrder ?? extractLessonPeriodOrder(periodLabel),
+    normalizedSubjectKey,
+    normalizedUnitKey,
+  );
+  const groupSummary: LessonGroupSummary = {
+    groupKey: [subject, periodLabel, lessonUnit].filter(Boolean).join("|"),
+    lessonKey,
+    label: buildLessonGroupLabel(subject, periodLabel, normalizedUnitLabel || lessonUnit),
+    lessonDate: lessonDate || extractLessonDateFromLabel(periodLabel),
+    periodOrder: periodOrder ?? extractLessonPeriodOrder(periodLabel),
+    subjectKey: normalizedSubjectKey,
+    unitKey: normalizedUnitKey,
+    unitLabel: normalizedUnitLabel,
+    periodLabel,
+    lessonUnit,
+    classroom,
+    subject,
+    responseCount: studentResponses.length > 0 ? studentResponses.length : studentResults.length,
+    excludedResponseCount: 0,
+    overview: { ...overview },
+    difficultConcepts: difficultConcepts.map((item) => ({ ...item })),
+    assignmentSummary: assignmentSummary.map((item) => ({ ...item })),
+    supportStudents: supportStudents.map((item) => ({ ...item, student: { ...item.student } })),
+    studentResults: studentResults.map((item) => ({ ...item, student: { ...item.student } })),
+    studentResponses: studentResponses.map((item) => ({
+      ...item,
+      student: { ...item.student },
+      concepts: item.concepts.map((concept) => ({ ...concept })),
+    })),
+  };
+
+  return [
+    {
+      ...cloneLessonGroupSummary(groupSummary),
+      groups: [cloneLessonGroupSummary(groupSummary)],
+    },
+  ];
 }

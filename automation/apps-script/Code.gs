@@ -192,23 +192,174 @@ function buildLessonSummary_() {
   const rules = CLASSPAGE_AUTOMATION_CONFIG.rules.lessonSummary;
   const allowlist = readAllowlistIndex_();
   const rows = readSheetRows_(sourceConfig);
-  const periodRows = dedupeLatestByStudent_(
+  const latestLessonRows = dedupeLatestByStudent_(
     filterRowsForLatestLessonGroup_(rows, sourceConfig.headers),
     sourceConfig.headers,
   );
-  const allowlistResult = filterRowsByAllowlist_(periodRows, sourceConfig.headers, allowlist);
+  const allowlistResult = filterRowsByAllowlist_(latestLessonRows, sourceConfig.headers, allowlist);
   const latestRows = allowlistResult.includedRows;
-  const responseCount = latestRows.length;
-  const excludedResponseCount = allowlistResult.excludedCount;
-  const referenceRows = latestRows.length > 0 ? latestRows : periodRows;
-  const latestRow = referenceRows.length > 0 ? referenceRows[0] : null;
-  const classroom = getMostCommonValue_(referenceRows, sourceConfig.headers.classroom);
-  const subject = latestRow ? getRowValue_(latestRow, sourceConfig.headers.subject) : "";
-  const periodLabel = latestRow
-    ? buildLessonPeriodLabel_(latestRow, sourceConfig.headers)
-    : "응답 없음";
+  const referenceRows = latestRows.length > 0 ? latestRows : latestLessonRows;
+  const latestSummary = buildLessonSummarySlice_(
+    latestRows,
+    referenceRows,
+    sourceConfig,
+    rules,
+    {
+      excludedResponseCount: allowlistResult.excludedCount,
+    },
+  );
+  const subjectSummaries = buildLessonSubjectSummaries_(
+    rows,
+    sourceConfig,
+    rules,
+    allowlist,
+  );
 
-  const conceptStats = buildConceptStats_(latestRows, sourceConfig.headers, rules);
+  return {
+    type: "lesson-summary",
+    generatedAt: toIsoString_(new Date()),
+    lessonKey: latestSummary.lessonKey,
+    lessonDate: latestSummary.lessonDate,
+    periodOrder: latestSummary.periodOrder,
+    subjectKey: latestSummary.subjectKey,
+    unitKey: latestSummary.unitKey,
+    unitLabel: latestSummary.unitLabel,
+    periodLabel: latestSummary.periodLabel,
+    classroom: latestSummary.classroom,
+    subject: latestSummary.subject,
+    responseCount: latestSummary.responseCount,
+    excludedResponseCount: latestSummary.excludedResponseCount,
+    source: {
+      formName: sourceConfig.formName,
+      formUrl: sourceConfig.formUrl,
+      sheetName: sourceConfig.sheetName,
+      aggregatorNote: buildLessonSummaryNote_(allowlist.enabled),
+    },
+    overview: latestSummary.overview,
+    difficultConcepts: latestSummary.difficultConcepts,
+    assignmentSummary: latestSummary.assignmentSummary,
+    supportStudents: latestSummary.supportStudents,
+    studentResults: latestSummary.studentResults,
+    studentResponses: latestSummary.studentResponses,
+    subjectSummaries: subjectSummaries,
+  };
+}
+
+function buildLessonSubjectSummaries_(rows, sourceConfig, rules, allowlist) {
+  const headers = sourceConfig.headers;
+  const recentGroupLimit = getLessonRecentGroupLimit_(rules);
+  const groupKeysBySubject = {};
+  const sortedRows = rows.slice().sort(function (left, right) {
+    return getComparableRowDate_(right, headers).getTime()
+      - getComparableRowDate_(left, headers).getTime();
+  });
+
+  sortedRows.forEach(function (row) {
+    const subject = getLessonSubjectLabel_(row, headers);
+    const groupKey = buildLessonGroupKey_(row, headers);
+
+    if (!groupKeysBySubject[subject]) {
+      groupKeysBySubject[subject] = {};
+    }
+
+    if (!groupKeysBySubject[subject][groupKey]) {
+      groupKeysBySubject[subject][groupKey] = getComparableRowDate_(row, headers).getTime();
+    }
+  });
+
+  return Object.keys(groupKeysBySubject)
+    .map(function (subject) {
+      const groupSummaries = Object.keys(groupKeysBySubject[subject])
+        .map(function (groupKey) {
+          const groupRows = dedupeLatestByStudent_(
+            rows.filter(function (row) {
+              return buildLessonGroupKey_(row, headers) === groupKey;
+            }),
+            headers,
+          );
+          const allowlistResult = filterRowsByAllowlist_(groupRows, headers, allowlist);
+          const latestRows = allowlistResult.includedRows;
+          const referenceRows = latestRows.length > 0 ? latestRows : groupRows;
+          const summary = buildLessonSummarySlice_(
+            latestRows,
+            referenceRows,
+            sourceConfig,
+            rules,
+            {
+              excludedResponseCount: allowlistResult.excludedCount,
+              subjectLabel: subject,
+            },
+          );
+          const latestDate = referenceRows.length > 0
+            ? getComparableRowDate_(referenceRows[0], headers).getTime()
+            : groupKeysBySubject[subject][groupKey];
+
+          return {
+            summary: summary,
+            latestDate: latestDate,
+          };
+        })
+        .sort(compareLessonSummaryEntries_);
+      const visibleGroupSummaries = recentGroupLimit > 0
+        ? groupSummaries.slice(0, recentGroupLimit)
+        : groupSummaries;
+      const latestGroup = visibleGroupSummaries.length > 0
+        ? visibleGroupSummaries[0].summary
+        : buildLessonSummarySlice_([], [], sourceConfig, rules, {
+            excludedResponseCount: 0,
+            subjectLabel: subject,
+          });
+
+      return {
+        summary: Object.assign({}, latestGroup, {
+          groups: visibleGroupSummaries.map(function (entry) {
+            return entry.summary;
+          }),
+        }),
+        latestDate: visibleGroupSummaries.length > 0 ? visibleGroupSummaries[0].latestDate : 0,
+      };
+    })
+    .sort(function (left, right) {
+      return compareLessonSummaryEntries_(
+        { summary: left.summary, latestDate: left.latestDate },
+        { summary: right.summary, latestDate: right.latestDate },
+      );
+    })
+    .map(function (entry) {
+      return entry.summary;
+    });
+}
+
+function buildLessonSummarySlice_(latestRows, referenceRows, sourceConfig, rules, options) {
+  const headers = sourceConfig.headers;
+  const latestRow = referenceRows.length > 0 ? referenceRows[0] : null;
+  const classroom = getMostCommonValue_(referenceRows, headers.classroom);
+  const subject = latestRow
+    ? getLessonSubjectLabel_(latestRow, headers)
+    : options && options.subjectLabel
+      ? options.subjectLabel
+      : "";
+  const periodLabel = latestRow
+    ? buildLessonPeriodLabel_(latestRow, headers)
+    : "응답 없음";
+  const lessonUnit = latestRow
+    ? getRowValueByHeaderOptions_(latestRow, [
+      headers.lessonUnit,
+      "오늘 배운 단원",
+      "오늘 배운 단원/주제",
+    ])
+    : "";
+  const unitLabel = lessonUnit;
+  const lessonDate = latestRow
+    ? buildLessonDateLabel_(latestRow, headers)
+    : extractLessonDateFromText_(periodLabel);
+  const periodOrder = latestRow
+    ? parseLessonPeriodOrder_(getLessonPeriodValue_(latestRow, headers))
+    : parseLessonPeriodOrder_(periodLabel);
+  const subjectKey = buildLessonStructuredKeyPart_(subject);
+  const unitKey = buildLessonStructuredKeyPart_(unitLabel);
+  const lessonKey = buildLessonMachineKey_(lessonDate, periodOrder, subjectKey, unitKey);
+  const conceptStats = buildConceptStats_(latestRows, headers, rules);
   const difficultConcepts = Object.keys(conceptStats)
     .map(function (conceptName) {
       const stat = conceptStats[conceptName];
@@ -231,13 +382,11 @@ function buildLessonSummary_() {
     });
 
   const supportAnalyses = latestRows.map(function (row) {
-    return analyzeLessonRow_(row, sourceConfig.headers, rules);
+    return analyzeLessonRow_(row, headers, rules);
   });
-
   const assignmentLabels = supportAnalyses.map(function (item) {
     return item.assignmentLabel;
   });
-
   const supportStudents = supportAnalyses
     .filter(function (item) {
       return item.score >= rules.supportScoreThreshold;
@@ -245,7 +394,6 @@ function buildLessonSummary_() {
     .map(function (item) {
       return item.supportStudent;
     });
-
   const studentResults = supportAnalyses
     .map(function (item) {
       return item.studentResult;
@@ -256,7 +404,6 @@ function buildLessonSummary_() {
       }
       return right.correctCount - left.correctCount;
     });
-
   const averageCorrectCount = calculateAverage_(
     supportAnalyses.map(function (item) {
       return item.correctCount;
@@ -273,21 +420,36 @@ function buildLessonSummary_() {
     "미분류",
     "분류되지 않은 응답",
   );
+  const studentResponses = supportAnalyses
+    .map(function (item) {
+      return item.studentResponse;
+    })
+    .sort(function (left, right) {
+      if (right.incorrectCount !== left.incorrectCount) {
+        return right.incorrectCount - left.incorrectCount;
+      }
+      return right.correctCount - left.correctCount;
+    });
 
   return {
-    type: "lesson-summary",
-    generatedAt: toIsoString_(new Date()),
+    groupKey: latestRow ? buildLessonGroupKey_(latestRow, headers) : [subject, periodLabel, lessonUnit].join("|"),
+    lessonKey: lessonKey,
+    label: latestRow
+      ? buildLessonGroupLabel_(latestRow, headers)
+      : buildLessonGroupLabelFromParts_(subject, periodLabel, unitLabel),
+    lessonDate: lessonDate,
+    periodOrder: periodOrder,
+    subjectKey: subjectKey,
+    unitKey: unitKey,
+    unitLabel: unitLabel,
     periodLabel: periodLabel,
+    lessonUnit: lessonUnit,
     classroom: classroom,
     subject: subject,
-    responseCount: responseCount,
-    excludedResponseCount: excludedResponseCount,
-    source: {
-      formName: sourceConfig.formName,
-      formUrl: sourceConfig.formUrl,
-      sheetName: sourceConfig.sheetName,
-      aggregatorNote: buildLessonSummaryNote_(allowlist.enabled),
-    },
+    responseCount: latestRows.length,
+    excludedResponseCount: options && typeof options.excludedResponseCount === "number"
+      ? options.excludedResponseCount
+      : 0,
     overview: {
       averageCorrectCount: roundToOneDecimal_(averageCorrectCount),
       averageIncorrectCount: roundToOneDecimal_(averageIncorrectCount),
@@ -297,16 +459,7 @@ function buildLessonSummary_() {
     assignmentSummary: assignmentSummary,
     supportStudents: supportStudents,
     studentResults: studentResults,
-    studentResponses: supportAnalyses
-      .map(function (item) {
-        return item.studentResponse;
-      })
-      .sort(function (left, right) {
-        if (right.incorrectCount !== left.incorrectCount) {
-          return right.incorrectCount - left.incorrectCount;
-        }
-        return right.correctCount - left.correctCount;
-      }),
+    studentResponses: studentResponses,
   };
 }
 
@@ -385,6 +538,7 @@ function buildStarLedger_() {
     type: "star-ledger",
     generatedAt: toIsoString_(new Date()),
     periodLabel: buildStarPeriodLabel_(sortedEvents),
+    classroom: getMostCommonStarClassroom_(sortedEvents),
     excludedResponseCount:
       classRows.excludedCount + lessonRows.excludedCount + adjustmentRows.excludedCount,
     eventCount: sortedEvents.length,
@@ -396,9 +550,35 @@ function buildStarLedger_() {
     },
     sourceSummary: sourceSummary,
     rules: rules,
+    ruleSummary: buildStarRuleSummary_(sortedEvents, rules),
     totals: totals,
     recentEvents: sortedEvents.slice(0, starModeConfig.recentEventLimit || 8),
   };
+}
+
+function getMostCommonStarClassroom_(events) {
+  const counts = {};
+  let bestLabel = "";
+  let bestCount = 0;
+
+  events.forEach(function (event) {
+    const classroom = event
+      && event.student
+      && typeof event.student.classroom === "string"
+      ? event.student.classroom.trim()
+      : "";
+    if (!classroom) {
+      return;
+    }
+
+    counts[classroom] = (counts[classroom] || 0) + 1;
+    if (counts[classroom] > bestCount) {
+      bestLabel = classroom;
+      bestCount = counts[classroom];
+    }
+  });
+
+  return bestLabel;
 }
 
 function validateSheet_(sourceConfig, requiredHeaderKeys) {
@@ -587,9 +767,14 @@ function buildClassSummaryNote_(useAllowlist) {
 }
 
 function buildLessonSummaryNote_(useAllowlist) {
-  return useAllowlist
+  const baseNote = useAllowlist
     ? "Apps Script가 수업용 응답과 허가 학생 명단을 이메일로 대조한 뒤 개념 난도/정오답/과제/보충 필요 학생을 규칙 기반으로 집계"
     : "Apps Script가 Google 로그인 이메일 기준으로 수업용 응답을 정리해 개념 난도/정오답/과제/보충 필요 학생을 규칙 기반으로 집계";
+  const recentGroupLimit = getLessonRecentGroupLimit_(CLASSPAGE_AUTOMATION_CONFIG.rules.lessonSummary);
+
+  return recentGroupLimit > 0
+    ? baseNote + " / 과목별 최근 " + recentGroupLimit + "개 수업 그룹까지 유지"
+    : baseNote;
 }
 
 function buildStarLedgerNote_(useAllowlist) {
@@ -939,6 +1124,11 @@ function validateStarBatchGrantRow_(row, headers) {
 
 function buildStarAdjustmentRowFromBatchGrant_(row, headers, batchId, appliedAt) {
   const adjustmentHeaders = CLASSPAGE_AUTOMATION_CONFIG.sources.starAdjustments.headers;
+  const actor = getRowValueByHeaderOptions_(row, [
+    headers.teacher,
+    "선생님",
+    "교사",
+  ]);
 
   return {
     [adjustmentHeaders.timestamp]: getRowValue_(row, headers.timestamp) || appliedAt,
@@ -951,7 +1141,9 @@ function buildStarAdjustmentRowFromBatchGrant_(row, headers, batchId, appliedAt)
     [adjustmentHeaders.delta]: getRowValue_(row, headers.delta),
     [adjustmentHeaders.visibility]: getRowValue_(row, headers.visibility),
     [adjustmentHeaders.note]: getRowValue_(row, headers.note),
-    [adjustmentHeaders.teacher]: getRowValue_(row, headers.teacher),
+    [adjustmentHeaders.teacher]: actor,
+    선생님: actor,
+    교사: actor,
     [adjustmentHeaders.batchId]: batchId,
   };
 }
@@ -1472,18 +1664,22 @@ function buildAssignmentCompletionLabel_(assignmentSummary) {
 }
 
 function buildLessonGroupKey_(row, headers) {
-  const dateLabel = getExplicitDateLabel_(row, headers.date)
-    || formatDateOnly_(getRowDate_(row, headers.timestamp));
-  const period = getRowValueByHeaderOptions_(row, [
-    headers.period,
-    "교시",
-    "오늘 수업한 교시",
+  const dateLabel = buildLessonDateLabel_(row, headers);
+  const period = getLessonPeriodValue_(row, headers);
+  const subject = getLessonSubjectLabel_(row, headers);
+  const lessonUnit = getRowValueByHeaderOptions_(row, [
+    headers.lessonUnit,
+    "오늘 배운 단원",
+    "오늘 배운 단원/주제",
   ]);
-  const subject = getRowValueByHeaderOptions_(row, [
+  return [dateLabel, period, subject, lessonUnit].join("|");
+}
+
+function getLessonSubjectLabel_(row, headers) {
+  return getRowValueByHeaderOptions_(row, [
     headers.subject,
     "과목",
-  ]);
-  return [dateLabel, period, subject].join("|");
+  ]) || "과목 미확인";
 }
 
 function buildClassDateGroupKey_(row, timestampHeader) {
@@ -1491,19 +1687,108 @@ function buildClassDateGroupKey_(row, timestampHeader) {
 }
 
 function buildLessonPeriodLabel_(row, headers) {
-  const dateLabel = getExplicitDateLabel_(row, headers.date)
-    || formatDateOnly_(getRowDate_(row, headers.timestamp));
-  const period = getRowValueByHeaderOptions_(row, [
-    headers.period,
-    "교시",
-    "오늘 수업한 교시",
-  ]);
+  const dateLabel = buildLessonDateLabel_(row, headers);
+  const period = getLessonPeriodValue_(row, headers);
   const lessonUnit = getRowValueByHeaderOptions_(row, [
     headers.lessonUnit,
     "오늘 배운 단원",
     "오늘 배운 단원/주제",
   ]);
   return [dateLabel, period, lessonUnit].filter(Boolean).join(" / ");
+}
+
+function buildLessonGroupLabel_(row, headers) {
+  return buildLessonGroupLabelFromParts_(
+    getLessonSubjectLabel_(row, headers),
+    buildLessonPeriodLabel_(row, headers),
+    getRowValueByHeaderOptions_(row, [
+      headers.lessonUnit,
+      "오늘 배운 단원",
+      "오늘 배운 단원/주제",
+    ]),
+  );
+}
+
+function buildLessonGroupLabelFromParts_(subject, periodLabel, lessonUnit) {
+  const parts = [subject, periodLabel];
+  if (lessonUnit && periodLabel.indexOf(lessonUnit) === -1) {
+    parts.push(lessonUnit);
+  }
+
+  return parts.filter(Boolean).join(" · ") || "수업 그룹";
+}
+
+function buildLessonDateLabel_(row, headers) {
+  return getExplicitDateLabel_(row, headers.date)
+    || formatDateOnly_(getRowDate_(row, headers.timestamp));
+}
+
+function getLessonPeriodValue_(row, headers) {
+  return getRowValueByHeaderOptions_(row, [
+    headers.period,
+    "교시",
+    "오늘 수업한 교시",
+  ]);
+}
+
+function parseLessonPeriodOrder_(value) {
+  const raw = String(value || "");
+  const periodMatch = raw.match(/(\d+)\s*교시/);
+  if (periodMatch) {
+    return Number(periodMatch[1]);
+  }
+
+  const numericMatch = raw.match(/(\d+)/);
+  return numericMatch ? Number(numericMatch[1]) : null;
+}
+
+function buildLessonStructuredKeyPart_(value) {
+  return normalizeText_(value)
+    .replace(/\s+/g, "-")
+    .replace(/[|/\\]+/g, "-");
+}
+
+function buildLessonMachineKey_(lessonDate, periodOrder, subjectKey, unitKey) {
+  return [
+    lessonDate || "date-missing",
+    periodOrder != null ? "p" + periodOrder : "p0",
+    subjectKey || "subject-missing",
+    unitKey || "unit-missing",
+  ].join("|");
+}
+
+function extractLessonDateFromText_(value) {
+  const match = String(value || "").match(/\d{4}-\d{2}-\d{2}/);
+  return match ? match[0] : "";
+}
+
+function getLessonRecentGroupLimit_(rules) {
+  const limit = Number(rules && rules.recentGroupLimitPerSubject);
+  return Number.isFinite(limit) && limit > 0 ? limit : 0;
+}
+
+function compareLessonSummaryEntries_(left, right) {
+  const leftSummary = left.summary || {};
+  const rightSummary = right.summary || {};
+  const leftDate = leftSummary.lessonDate || "";
+  const rightDate = rightSummary.lessonDate || "";
+
+  if (leftDate !== rightDate) {
+    return rightDate.localeCompare(leftDate);
+  }
+
+  const leftPeriod = typeof leftSummary.periodOrder === "number" ? leftSummary.periodOrder : -1;
+  const rightPeriod = typeof rightSummary.periodOrder === "number" ? rightSummary.periodOrder : -1;
+  if (leftPeriod !== rightPeriod) {
+    return rightPeriod - leftPeriod;
+  }
+
+  if ((right.latestDate || 0) !== (left.latestDate || 0)) {
+    return (right.latestDate || 0) - (left.latestDate || 0);
+  }
+
+  return String(leftSummary.lessonKey || leftSummary.groupKey || "")
+    .localeCompare(String(rightSummary.lessonKey || rightSummary.groupKey || ""));
 }
 
 function buildStudentKey_(row, headers) {
@@ -1795,7 +2080,11 @@ function buildManualStarEvent_(row, headers, rules) {
   const rawDelta = headers.delta ? getRowValue_(row, headers.delta) : "";
   const rawVisibility = headers.visibility ? normalizeText_(getRowValue_(row, headers.visibility)) : "";
   const note = headers.note ? getRowValue_(row, headers.note) : "";
-  const actor = headers.teacher ? getRowValue_(row, headers.teacher) : "";
+  const actor = getRowValueByHeaderOptions_(row, [
+    headers.teacher,
+    "선생님",
+    "교사",
+  ]);
   const batchId = headers.batchId ? getRowValue_(row, headers.batchId) : "";
   const studentKey = buildStudentKey_(row, headers);
   const occurredAt = buildEventOccurredAt_(row, headers);
@@ -1835,6 +2124,79 @@ function buildStarEventSourceSummary_(events) {
   });
 
   return summary;
+}
+
+function buildStarRuleSummary_(events, rules) {
+  const summaryByRule = {};
+
+  (rules || []).forEach(function (rule) {
+    summaryByRule[rule.ruleId] = createStarRuleSummaryEntry_(rule);
+  });
+
+  events.forEach(function (event) {
+    if (!summaryByRule[event.ruleId]) {
+      summaryByRule[event.ruleId] = {
+        ruleId: event.ruleId,
+        label: event.ruleId,
+        category: event.category || "custom",
+        visibility: event.visibility === "teacher" ? "teacher" : "student",
+        eventCount: 0,
+        manualCount: 0,
+        automaticCount: 0,
+        sourceSummary: {
+          manual: 0,
+          "class-form": 0,
+          "lesson-form": 0,
+          system: 0,
+        },
+      };
+    }
+
+    const source = normalizeStarEventSource_(event.source);
+    const summary = summaryByRule[event.ruleId];
+    summary.eventCount += 1;
+    summary.sourceSummary[source] += 1;
+
+    if (source === "manual") {
+      summary.manualCount += 1;
+    } else {
+      summary.automaticCount += 1;
+    }
+  });
+
+  return Object.keys(summaryByRule)
+    .map(function (ruleId) {
+      return summaryByRule[ruleId];
+    })
+    .sort(function (left, right) {
+      if (right.eventCount !== left.eventCount) {
+        return right.eventCount - left.eventCount;
+      }
+
+      if (right.automaticCount !== left.automaticCount) {
+        return right.automaticCount - left.automaticCount;
+      }
+
+      return String(left.label || left.ruleId).localeCompare(String(right.label || right.ruleId));
+    });
+}
+
+function createStarRuleSummaryEntry_(rule) {
+  return {
+    ruleId: rule.ruleId,
+    label: rule.label,
+    category: rule.category,
+    visibility: rule.visibility === "teacher" ? "teacher" : "student",
+    eventCount: 0,
+    manualCount: 0,
+    automaticCount: 0,
+    sourceSummary: {
+      manual: 0,
+      "class-form": 0,
+      "lesson-form": 0,
+      system: 0,
+    },
+  };
 }
 
 function buildStarStudentTotals_(events) {

@@ -62,7 +62,7 @@ async function loadAggregateFile<T>(
       kind,
       path: "",
       status: "missing",
-      message: "집계 파일 경로가 비어 있습니다. Settings -> classpage에서 JSON 경로를 입력하세요.",
+      message: "집계 파일 경로가 비어 있습니다. Settings -> classpage에서 집계 파일 경로를 먼저 입력해 주세요.",
       data: null,
     };
   }
@@ -73,7 +73,7 @@ async function loadAggregateFile<T>(
       kind,
       path: normalizedPath,
       status: "missing",
-      message: "설정된 경로에 JSON 파일이 없습니다. docs/START_HERE.md와 docs/BEGINNER_SETUP.md의 16단계를 확인하세요.",
+      message: "설정된 경로에 집계 파일이 없습니다. 처음 연결 중이라면 정상입니다. 파일 생성과 경로를 다시 확인해 주세요.",
       data: null,
     };
   }
@@ -85,7 +85,7 @@ async function loadAggregateFile<T>(
     if (!hasExpectedAggregateType(parsed, expectedType)) {
       const actualType = getAggregateTypeLabel(parsed);
       throw new Error(
-        `기대한 JSON 타입은 ${expectedType}인데 현재 파일은 ${actualType} 입니다.`,
+        `기대한 집계 형식은 ${expectedType}인데 현재 파일은 ${actualType} 입니다.`,
       );
     }
 

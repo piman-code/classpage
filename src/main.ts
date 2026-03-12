@@ -16,11 +16,14 @@ import type {
   ClassPageSettings,
   ClassStudentResponse,
   ClassSummaryAggregate,
+  LessonGroupSummary,
+  LessonSubjectSummary,
   LessonSummaryAggregate,
   LessonStudentResponse,
   StarAutoCriteria,
   StarEvent,
   StarModeLedger,
+  StarRuleEventSummary,
   StarRuleSettings,
   StarStudentTotal,
   StudentReference,
@@ -34,6 +37,8 @@ const VIEW_TYPE_CLASSPAGE = "classpage-view";
 type PageMode = "student" | "teacher";
 type TeacherFocusMode = "overview" | "class" | "lesson" | "star";
 type RowTone = "neutral" | "warning" | "positive";
+type LessonDatePreset = "all" | "recent-3" | "recent-5" | "specific";
+type StarStudentFilterMode = "all" | "adjusted" | "recent" | "manual";
 type TeacherAggregateState =
   | AggregateSourceState<ClassSummaryAggregate>
   | AggregateSourceState<LessonSummaryAggregate>
@@ -67,6 +72,29 @@ interface DrilldownGroup {
   emptyMessage: string;
   items: DrilldownItem[];
 }
+
+interface SectionHeaderOptions {
+  badgeText?: string;
+}
+
+interface LessonFilterOption {
+  value: string;
+  label: string;
+}
+
+interface LessonExplorerState {
+  availableSubjects: LessonSubjectSummary[];
+  selectedSubject: LessonSubjectSummary;
+  allGroups: LessonGroupSummary[];
+  unitFilteredGroups: LessonGroupSummary[];
+  filteredGroups: LessonGroupSummary[];
+  selectedGroup: LessonGroupSummary | null;
+  unitOptions: LessonFilterOption[];
+  dateOptions: LessonFilterOption[];
+}
+
+const LESSON_FILTER_MISSING_UNIT = "__lesson-unit-missing__";
+const LESSON_FILTER_MISSING_DATE = "__lesson-date-missing__";
 
 export default class ClassPagePlugin extends Plugin {
   settings: ClassPageSettings = DEFAULT_SETTINGS;
@@ -137,6 +165,13 @@ export default class ClassPagePlugin extends Plugin {
 class ClassPageView extends ItemView {
   private pageMode: PageMode = "student";
   private teacherFocusMode: TeacherFocusMode = "overview";
+  private lessonSubjectSelection = "";
+  private lessonUnitFilter = "";
+  private lessonDatePreset: LessonDatePreset = "all";
+  private lessonDateFilter = "";
+  private lessonGroupSelection = "";
+  private starStudentQuery = "";
+  private starStudentFilterMode: StarStudentFilterMode = "all";
   private renderToken = 0;
 
   constructor(
@@ -235,7 +270,7 @@ class ClassPageView extends ItemView {
   private renderModeToggle(parent: HTMLElement): void {
     const toggle = parent.createDiv({ cls: "classpage-mode-toggle" });
     this.renderModeButton(toggle, "student", "학생용 페이지");
-    this.renderModeButton(toggle, "teacher", "교사용 페이지");
+    this.renderModeButton(toggle, "teacher", "선생님 페이지");
   }
 
   private renderModeButton(
@@ -295,6 +330,7 @@ class ClassPageView extends ItemView {
     settings: TeacherPageSettings,
     teacherData: TeacherPageData | null,
   ): void {
+    this.renderTeacherContextCard(parent, teacherData);
     this.renderTeacherStatusSection(parent, teacherData);
 
     if (this.shouldShowTeacherSection("class")) {
@@ -303,6 +339,9 @@ class ClassPageView extends ItemView {
         classSection,
         settings.classSummaryTitle,
         this.buildClassSectionDescription(teacherData?.classSummary ?? null),
+        {
+          badgeText: this.getSourceClassroomBadge(teacherData?.classSummary ?? null),
+        },
       );
       this.renderClassSummaryCard(
         classSection,
@@ -317,6 +356,9 @@ class ClassPageView extends ItemView {
         lessonSection,
         settings.lessonSummaryTitle,
         this.buildLessonSectionDescription(teacherData?.lessonSummary ?? null),
+        {
+          badgeText: this.getSourceClassroomBadge(teacherData?.lessonSummary ?? null),
+        },
       );
       this.renderLessonSummaryCard(
         lessonSection,
@@ -331,6 +373,9 @@ class ClassPageView extends ItemView {
         starSection,
         settings.starLedgerTitle,
         this.buildStarSectionDescription(teacherData?.starLedger ?? null),
+        {
+          badgeText: this.getSourceClassroomBadge(teacherData?.starLedger ?? null),
+        },
       );
       this.renderStarLedgerCard(
         starSection,
@@ -340,6 +385,41 @@ class ClassPageView extends ItemView {
     }
 
     this.renderTeacherAdvancedSection(parent, teacherData);
+  }
+
+  private renderTeacherContextCard(
+    parent: HTMLElement,
+    teacherData: TeacherPageData | null,
+  ): void {
+    const context = this.buildTeacherContextSummary(teacherData);
+    const card = parent.createDiv({ cls: "classpage-card classpage-context-card" });
+    const top = card.createDiv({ cls: "classpage-context-card__top" });
+
+    top.createEl("span", {
+      cls: "classpage-context-card__eyebrow",
+      text: "현재 확인 대상 학급",
+    });
+    top.createEl("span", {
+      cls: "classpage-context-badge",
+      text: `화면: ${context.focusLabel}`,
+    });
+
+    card.createEl("strong", {
+      cls: "classpage-context-card__value",
+      text: context.classroomLabel,
+    });
+
+    if (context.meta) {
+      card.createEl("p", {
+        cls: "classpage-context-card__meta",
+        text: context.meta,
+      });
+    }
+
+    card.createEl("p", {
+      cls: "classpage-context-card__description",
+      text: context.description,
+    });
   }
 
   private renderBoundaryCard(
@@ -370,12 +450,22 @@ class ClassPageView extends ItemView {
     parent: HTMLElement,
     title: string,
     description: string,
+    options: SectionHeaderOptions = {},
   ): void {
     const header = parent.createDiv({ cls: "classpage-section__header" });
-    header.createEl("h2", {
+    const headingRow = header.createDiv({ cls: "classpage-section__heading-row" });
+    headingRow.createEl("h2", {
       cls: "classpage-section__title",
       text: title,
     });
+
+    if (options.badgeText) {
+      headingRow.createEl("span", {
+        cls: "classpage-context-badge",
+        text: options.badgeText,
+      });
+    }
+
     header.createEl("p", {
       cls: "classpage-section__description",
       text: description,
@@ -391,6 +481,9 @@ class ClassPageView extends ItemView {
       section,
       "오늘 상태",
       "카드를 눌러 필요한 영역만 보고, 다시 누르면 전체를 봅니다.",
+      {
+        badgeText: this.buildTeacherContextSummary(teacherData).badgeText,
+      },
     );
 
     const grid = section.createDiv({ cls: "classpage-dashboard-grid" });
@@ -539,7 +632,7 @@ class ClassPageView extends ItemView {
     card.createEl("h2", { cls: "classpage-card__title", text: title });
 
     const list = card.createEl("ul", { cls: "classpage-list" });
-    const entries = items.length > 0 ? items : ["등록된 항목이 없습니다."];
+    const entries = items.length > 0 ? items : ["아직 넣어 둔 항목이 없습니다."];
 
     for (const item of entries) {
       const listItem = list.createEl("li", { cls: "classpage-list__item" });
@@ -637,6 +730,10 @@ class ClassPageView extends ItemView {
 
     const metaList = card.createEl("dl", { cls: "classpage-meta-list" });
     this.renderMetaRow(metaList, "집계 시각", formatDateLabel(sourceState.data.generatedAt));
+    const classroomLabel = getAggregateDisplayClassroom(sourceState.data);
+    if (classroomLabel) {
+      this.renderMetaRow(metaList, "대상 학급", classroomLabel);
+    }
     if (sourceState.data.type === "star-ledger") {
       this.renderMetaRow(metaList, "반영 이벤트", `${sourceState.data.eventCount}건`);
       if (sourceState.data.excludedResponseCount > 0) {
@@ -658,6 +755,23 @@ class ClassPageView extends ItemView {
           "제외 응답",
           `${sourceState.data.excludedResponseCount}건`,
         );
+      }
+      if (sourceState.data.type === "lesson-summary") {
+        const subjectCount = sourceState.data.subjectSummaries.length;
+        const groupCount = sourceState.data.subjectSummaries.reduce(
+          (count, subject) => count + (subject.groups.length > 0 ? subject.groups.length : 1),
+          0,
+        );
+        if (subjectCount > 0 || groupCount > 0) {
+          this.renderMetaRow(
+            metaList,
+            "탐색 범위",
+            [
+              subjectCount > 0 ? `과목 ${subjectCount}개` : "",
+              groupCount > 0 ? `최근 수업 그룹 ${groupCount}개` : "",
+            ].filter(Boolean).join(" / "),
+          );
+        }
       }
       this.renderMetaRow(metaList, "범위", sourceState.data.periodLabel);
     }
@@ -780,39 +894,109 @@ class ClassPageView extends ItemView {
     }
 
     const summary = sourceState.data;
-    const responseMap = this.buildLessonResponseMap(summary.studentResponses);
-    const hasStudentSnapshots = summary.studentResponses.length > 0;
+    const explorer = this.getLessonExplorerState(summary);
+    const {
+      availableSubjects,
+      selectedSubject,
+      allGroups,
+      filteredGroups,
+      selectedGroup,
+      unitOptions,
+      dateOptions,
+    } = explorer;
+
+    if (
+      availableSubjects.length > 1
+      || allGroups.length > 1
+      || unitOptions.length > 1
+      || dateOptions.length > 1
+      || this.lessonDatePreset !== "all"
+      || this.lessonUnitFilter.length > 0
+      || this.lessonDateFilter.length > 0
+    ) {
+      this.renderLessonSubjectSelectorCard(
+        parent,
+        availableSubjects,
+        selectedSubject,
+        selectedGroup?.groupKey ?? "",
+      );
+    }
+
+    if (!selectedGroup) {
+      this.renderLessonEmptySelectionCard(parent, selectedSubject, unitOptions, dateOptions);
+      return;
+    }
+
+    const responseMap = this.buildLessonResponseMap(selectedGroup.studentResponses);
+    const hasStudentSnapshots = selectedGroup.studentResponses.length > 0;
+    const urgentFollowUpItems = this.buildLessonFollowUpDrilldownItems(selectedGroup, responseMap);
+    const lessonScopeDescription = this.buildLessonScopeDescription(explorer, {
+      includeSubjectCount: false,
+      includeCurrentGroup: false,
+    });
+
     const stats = parent.createDiv({ cls: "classpage-stat-grid" });
     this.renderStatCard(
       stats,
+      "현재 수업 그룹",
+      selectedGroup.label || selectedGroup.periodLabel || "수업 정보 없음",
+      [
+        getAggregateDisplayClassroom(selectedGroup) || "",
+        lessonScopeDescription,
+      ].filter(Boolean).join(" · "),
+    );
+    this.renderStatCard(
+      stats,
       "응답 수",
-      `${summary.responseCount}`,
-      this.buildResponseCountDescription(summary),
+      `${selectedGroup.responseCount}`,
+      this.buildResponseCountDescription(selectedGroup),
+    );
+    this.renderStatCard(
+      stats,
+      "다음 피드백 대상",
+      urgentFollowUpItems.length > 0 ? `${urgentFollowUpItems.length}명` : "없음",
+      urgentFollowUpItems.length > 0
+        ? `${urgentFollowUpItems[0].title}부터 확인`
+        : "지금 바로 확인할 학생이 없습니다.",
     );
     this.renderStatCard(
       stats,
       "평균 정답",
-      summary.overview.averageCorrectCount.toFixed(1),
-      `${summary.subject || "수업"} 기준`,
+      selectedGroup.overview.averageCorrectCount.toFixed(1),
+      `${selectedSubject.subject || selectedGroup.subject || "수업"} 기준`,
     );
     this.renderStatCard(
       stats,
       "평균 오답",
-      summary.overview.averageIncorrectCount.toFixed(1),
+      selectedGroup.overview.averageIncorrectCount.toFixed(1),
       "학생별 정오답 평균",
     );
     this.renderStatCard(
       stats,
       "복습/수행",
-      summary.overview.assignmentCompletionLabel || "미분류",
-      "집계 레이어 결과",
+      selectedGroup.overview.assignmentCompletionLabel || "미분류",
+      "가장 많이 확인된 상태",
+    );
+
+    this.renderStudentDrilldownCard(
+      parent,
+      "다음 피드백 대상",
+      urgentFollowUpItems,
+      "현재 바로 확인할 학생이 없습니다.",
+      true,
     );
 
     const grid = parent.createDiv({ cls: "classpage-summary-grid" });
+    this.renderDetailRowsCard(
+      grid,
+      "지금 먼저 볼 학생과 개념",
+      this.buildLessonPriorityRows(selectedGroup),
+      "지금 바로 볼 항목이 없습니다.",
+    );
     this.renderGroupedDrilldownCard(
       grid,
-      "어려워한 개념",
-      summary.difficultConcepts.map((item) => ({
+      "재설명 필요한 개념",
+      selectedGroup.difficultConcepts.map((item) => ({
         title: item.concept,
         meta: `${item.count}명`,
         description: [item.averageUnderstanding, item.note]
@@ -822,7 +1006,7 @@ class ClassPageView extends ItemView {
         emptyMessage: hasStudentSnapshots
           ? "해당 개념에서 낮은 이해 학생이 없습니다."
           : "학생별 응답 스냅샷이 없어 drill-down을 열 수 없습니다.",
-        items: summary.studentResponses
+        items: selectedGroup.studentResponses
           .filter((student) => this.hasLowConcept(student, item.concept))
           .map((student) => this.buildLessonStudentDrilldownItem(student)),
       })),
@@ -831,41 +1015,30 @@ class ClassPageView extends ItemView {
     this.renderGroupedDrilldownCard(
       grid,
       "복습/수행 분포",
-      summary.assignmentSummary.map((item) => ({
+      selectedGroup.assignmentSummary.map((item) => ({
         title: item.label,
         meta: `${item.count}명`,
         description: item.note || "복습/수행 상태",
         emptyMessage: hasStudentSnapshots
           ? "해당 복습/수행 상태 학생이 없습니다."
           : "학생별 응답 스냅샷이 없어 drill-down을 열 수 없습니다.",
-        items: summary.studentResponses
+        items: selectedGroup.studentResponses
           .filter((student) => student.assignmentStatus === item.label)
           .map((student) => this.buildLessonStudentDrilldownItem(student)),
       })),
       "복습/수행 집계가 없습니다.",
     );
-    this.renderStudentDrilldownCard(
-      grid,
-      "보충 지도가 필요한 학생",
-      summary.supportStudents.map((student) =>
-        this.buildLessonSupportDrilldownItem(
-          student,
-          this.findLessonResponseByStudent(responseMap, student.student),
-        )
-      ),
-      "보충 지도가 필요한 학생이 없습니다.",
-    );
 
     this.renderStudentDrilldownCard(
       parent,
-      "학생별 정오답 및 과제 현황",
-      summary.studentResults.map((result) =>
+      "학생별 결과와 후속 지도",
+      this.getSortedLessonStudentResults(selectedGroup).map((result) =>
         this.buildStudentResultDrilldownItem(
           result,
           this.findLessonResponseByStudent(responseMap, result.student),
         )
       ),
-      "학생별 결과가 없습니다.",
+      "표시할 학생 결과가 없습니다.",
       true,
     );
   }
@@ -881,20 +1054,30 @@ class ClassPageView extends ItemView {
     }
 
     const ledger = sourceState.data;
-    const enabledRules = getEnabledStarRules(ledger.rules);
+    const enabledRules = sortStarRulesForDisplay(getEnabledStarRules(ledger.rules));
     const visibleRules = enabledRules.filter((rule) => rule.visibility === "student");
     const teacherOnlyRules = enabledRules.filter((rule) => rule.visibility === "teacher");
     const autoRules = enabledRules.filter((rule) => hasAutomaticStarSource(rule.sources));
     const manualRules = enabledRules.filter((rule) => rule.sources.includes("manual"));
     const topStudents = sortStarTotals(ledger.totals).slice(0, 5);
+    const adjustedStudents = sortStarTotalsByHiddenAdjustment(ledger.totals)
+      .filter((total) => total.hiddenAdjustmentTotal !== 0)
+      .slice(0, 8);
+    const ruleSummaryRows = this.buildStarRuleSummaryRows(ledger, enabledRules);
     const automaticEventCount = getAutomaticStarEventCount(ledger.sourceSummary);
+    const classroomLabel = getAggregateDisplayClassroom(ledger) || "학급 정보 확인 필요";
+    const customDeltaRules = manualRules.filter((rule) => rule.allowCustomDelta);
+    const eventMap = this.buildStarRecentEventMap(ledger.recentEvents);
+    const flowRows = this.buildStarStudentFlowRows(ledger, eventMap);
 
     const stats = parent.createDiv({ cls: "classpage-stat-grid" });
     this.renderStatCard(
       stats,
-      "상태",
-      "기본 연결",
-      "읽기 전용 요약과 최근 이벤트를 확인합니다.",
+      "대상 학급",
+      classroomLabel,
+      ledger.classroom
+        ? `${ledger.periodLabel} 기준`
+        : "학급 정보가 비어 있으면 학생 목록의 공통 학급으로 보완 표시",
     );
     this.renderStatCard(
       stats,
@@ -904,65 +1087,98 @@ class ClassPageView extends ItemView {
     );
     this.renderStatCard(
       stats,
-      "학생 공개",
+      "학생 공개 규칙",
       `${visibleRules.length}`,
       `${ledger.totals.length}명 기준 공개 누적 계산`,
     );
     this.renderStatCard(
       stats,
-      "교사 전용",
+      "선생님 확인 규칙",
       `${teacherOnlyRules.length}`,
-      "수동 조정과 숨김 반영은 조정 시트 기준",
+      "숨김 조정과 비공개 규칙은 별도 합계로 표시",
     );
     this.renderStatCard(
       stats,
-      "전체 이벤트",
+      "반영 이벤트",
       `${ledger.eventCount}`,
-      `자동 ${automaticEventCount}건 / 수동 ${ledger.sourceSummary.manual}건`,
+      `자동 ${automaticEventCount}건 / 수동·일괄 ${ledger.sourceSummary.manual}건`,
     );
     this.renderStatCard(
       stats,
-      "수동/일괄",
-      ledger.sourceSummary.manual > 0 ? `${ledger.sourceSummary.manual}건` : "없음",
-      ledger.sourceSummary.manual > 0
-        ? "수동 조정 또는 일괄 부여가 ledger에 반영됨"
-        : "수동 조정/일괄 부여 입력 없음",
+      "수동 조정 가능",
+      `${manualRules.length}`,
+      customDeltaRules.length > 0
+        ? `행별 점수 직접 입력 허용 ${customDeltaRules.length}개`
+        : "수동 규칙은 기본 점수만 사용",
+    );
+    this.renderStatCard(
+      stats,
+      "숨김 조정 반영 학생",
+      adjustedStudents.length > 0 ? `${adjustedStudents.length}명` : "없음",
+      adjustedStudents.length > 0
+        ? "선생님 확인 전용 조정이 공개 점수와 분리 반영됨"
+        : "현재 숨김 조정 반영 학생이 없습니다.",
+    );
+    this.renderStatCard(
+      stats,
+      "발생 규칙",
+      `${ruleSummaryRows.filter((row) => row.meta !== "0건").length}`,
+      "규칙별 발생 집계 기준",
     );
 
     const grid = parent.createDiv({ cls: "classpage-summary-grid" });
     this.renderDetailRowsCard(
       grid,
-      "최근 별점 이벤트",
-      ledger.recentEvents.map((event) => this.buildStarEventRow(event, ledger.rules)),
-      "최근 이벤트가 없습니다.",
+      "별점 운영 상태",
+      this.buildStarOperationRows(ledger, visibleRules, teacherOnlyRules, manualRules),
+      "운영 상태를 표시할 수 없습니다.",
     );
     this.renderDetailRowsCard(
       grid,
-      "상위 학생",
+      "규칙별 발생 현황",
+      ruleSummaryRows,
+      "규칙별 발생 현황이 없습니다.",
+    );
+    this.renderDetailRowsCard(
+      grid,
+      "최근 별점 이벤트",
+      ledger.recentEvents.map((event) => this.buildStarEventRow(event, ledger.rules)),
+      ledger.eventCount > 0
+        ? "누적에는 반영되었지만 최근 표시 이벤트에는 아직 들어오지 않았습니다. 최근 집계 시각을 다시 확인해 주세요."
+        : "아직 최근에 표시할 별점 이벤트가 없습니다. 폼 제출이나 수동 조정이 반영되면 여기에 보입니다.",
+    );
+    this.renderDetailRowsCard(
+      grid,
+      "학생 흐름 빠른 보기",
+      flowRows,
+      "학생 흐름 요약이 없습니다.",
+    );
+    this.renderDetailRowsCard(
+      grid,
+      "학생별 누적 상위 5명",
       topStudents.map((total) => this.buildStarTotalRow(total)),
       "표시할 학생이 없습니다.",
     );
+    this.renderDetailRowsCard(
+      grid,
+      "숨김 조정이 반영된 학생",
+      adjustedStudents.map((total) => this.buildStarAdjustmentTotalRow(total)),
+      "현재 숨김 조정이 반영된 학생이 없습니다.",
+    );
+    this.renderStarStudentFilterCard(parent, ledger, eventMap);
 
     this.renderDetailRowsCard(
       parent,
-      "활성 규칙",
-      enabledRules.map((rule) => ({
-        title: rule.label,
-        meta: `${formatSignedPoints(rule.delta)} · ${getStarCategoryLabel(rule.category)}`,
-        description: [
-          rule.description,
-          getStarAutoCriteriaSummary(rule.autoCriteria),
-          getStarVisibilityLabel(rule.visibility),
-          getStarRuleSourceSummary(rule.sources),
-          rule.sources.includes("manual")
-            ? rule.allowCustomDelta
-              ? "수동 점수 직접 입력 허용"
-              : "수동 점수는 기본값 사용"
-            : "자동 적립 규칙",
-        ].join(" / "),
-        tone: rule.delta < 0 ? "warning" : "positive",
-      })),
-      "활성 규칙이 없습니다.",
+      "학생 공개 규칙",
+      visibleRules.map((rule) => this.buildStarRuleRow(rule, this.findStarRuleSummary(ledger, rule.ruleId))),
+      "학생 공개 규칙이 없습니다.",
+      true,
+    );
+    this.renderDetailRowsCard(
+      parent,
+      "선생님 확인 전용 규칙",
+      teacherOnlyRules.map((rule) => this.buildStarRuleRow(rule, this.findStarRuleSummary(ledger, rule.ruleId))),
+      "선생님 확인 전용 규칙이 없습니다.",
       true,
     );
   }
@@ -977,12 +1193,23 @@ class ClassPageView extends ItemView {
     const card = parent.createDiv({ cls: "classpage-card classpage-empty-card" });
     card.createEl("h3", {
       cls: "classpage-card__title",
-      text: "집계 결과를 표시할 수 없습니다",
+      text: this.getAggregateEmptyStateTitle(sourceState),
     });
     card.createEl("p", {
       cls: "classpage-empty-card__message",
-      text: emptyMessage,
+      text: this.getAggregateEmptyStateMessage(emptyMessage, sourceState),
     });
+
+    const tips = this.getAggregateEmptyStateTips(sourceState);
+    if (tips.length > 0) {
+      const tipList = card.createEl("ul", { cls: "classpage-empty-card__tips" });
+      for (const tip of tips) {
+        tipList.createEl("li", {
+          cls: "classpage-empty-card__tip",
+          text: tip,
+        });
+      }
+    }
 
     if (sourceState?.path) {
       card.createEl("p", {
@@ -994,7 +1221,7 @@ class ClassPageView extends ItemView {
     if (sourceState?.message) {
       card.createEl("p", {
         cls: "classpage-empty-card__detail",
-        text: `오류/상태: ${sourceState.message}`,
+        text: `현재 상태: ${sourceState.message}`,
       });
     }
   }
@@ -1107,6 +1334,376 @@ class ClassPageView extends ItemView {
     for (const item of items) {
       this.renderStudentDrilldownItem(list, item);
     }
+  }
+
+  private renderLessonSubjectSelectorCard(
+    parent: HTMLElement,
+    subjects: LessonSubjectSummary[],
+    selectedSubject: LessonSubjectSummary,
+    selectedGroupKey: string,
+  ): void {
+    const sortedSubjects = this.getLessonAvailableSummariesFromSubjects(subjects);
+    const explorer = this.getLessonExplorerStateFromSubject(selectedSubject, sortedSubjects);
+    const {
+      allGroups,
+      unitFilteredGroups,
+      filteredGroups,
+      unitOptions,
+      dateOptions,
+    } = explorer;
+    const showUnitFilter = unitOptions.length > 1 || this.lessonUnitFilter.length > 0;
+    const showDatePreset = unitFilteredGroups.length > 1 || this.lessonDatePreset !== "all";
+    const showDateFilter = this.lessonDatePreset === "specific"
+      && (dateOptions.length > 1 || this.lessonDateFilter.length > 0);
+    const card = parent.createDiv({ cls: "classpage-card classpage-filter-card" });
+    card.createEl("h3", {
+      cls: "classpage-card__title",
+      text: "수업 빠르게 찾기",
+    });
+    card.createEl("p", {
+      cls: "classpage-filter-card__description",
+      text: "과목을 고른 뒤 단원과 최근 수업 범위를 좁히고, 마지막에 수업 그룹을 선택하면 다음 피드백 대상과 수업 상태가 함께 바뀝니다.",
+    });
+
+    const toolbar = card.createDiv({
+      cls: "classpage-filter-toolbar classpage-filter-toolbar--lesson",
+    });
+    const subjectLabel = toolbar.createEl("label", {
+      cls: "classpage-filter-toolbar__label",
+      text: "확인할 과목",
+    });
+    const subjectSelect = subjectLabel.createEl("select", {
+      cls: "classpage-filter-select",
+    });
+
+    for (const subject of sortedSubjects) {
+      const option = subjectSelect.createEl("option", {
+        value: this.getLessonSubjectSelectionValue(subject),
+        text: subject.subject || "과목 정보 없음",
+      });
+      if (this.getLessonSubjectSelectionValue(subject) === this.getLessonSubjectSelectionValue(selectedSubject)) {
+        option.selected = true;
+      }
+    }
+
+    let unitSelect: HTMLSelectElement | null = null;
+    if (showUnitFilter) {
+      const unitLabel = toolbar.createEl("label", {
+        cls: "classpage-filter-toolbar__label",
+        text: "단원 필터",
+      });
+      unitSelect = unitLabel.createEl("select", {
+        cls: "classpage-filter-select",
+      });
+      unitSelect.createEl("option", {
+        value: "",
+        text: "전체 단원",
+      });
+
+      for (const option of unitOptions) {
+        const item = unitSelect.createEl("option", {
+          value: option.value,
+          text: option.label,
+        });
+        if (option.value === this.lessonUnitFilter) {
+          item.selected = true;
+        }
+      }
+    }
+
+    let datePresetSelect: HTMLSelectElement | null = null;
+    if (showDatePreset) {
+      const datePresetLabel = toolbar.createEl("label", {
+        cls: "classpage-filter-toolbar__label",
+        text: "최근 수업 범위",
+      });
+      datePresetSelect = datePresetLabel.createEl("select", {
+        cls: "classpage-filter-select",
+      });
+
+      for (const option of this.getLessonDatePresetOptions()) {
+        const item = datePresetSelect.createEl("option", {
+          value: option.value,
+          text: option.label,
+        });
+        if (option.value === this.lessonDatePreset) {
+          item.selected = true;
+        }
+      }
+    }
+
+    let dateSelect: HTMLSelectElement | null = null;
+    if (showDateFilter) {
+      const dateLabel = toolbar.createEl("label", {
+        cls: "classpage-filter-toolbar__label",
+        text: "특정 날짜",
+      });
+      dateSelect = dateLabel.createEl("select", {
+        cls: "classpage-filter-select",
+      });
+
+      for (const option of dateOptions) {
+        const item = dateSelect.createEl("option", {
+          value: option.value,
+          text: option.label,
+        });
+        if (option.value === this.lessonDateFilter) {
+          item.selected = true;
+        }
+      }
+    }
+
+    const groupLabel = toolbar.createEl("label", {
+      cls: "classpage-filter-toolbar__label classpage-filter-toolbar__label--wide",
+      text: "확인할 수업 그룹",
+    });
+    const groupSelect = groupLabel.createEl("select", {
+      cls: "classpage-filter-select",
+    });
+
+    if (filteredGroups.length === 0) {
+      groupSelect.disabled = true;
+      groupSelect.createEl("option", {
+        value: "",
+        text: "조건에 맞는 수업 그룹 없음",
+      });
+    } else {
+      for (const group of filteredGroups) {
+        const option = groupSelect.createEl("option", {
+          value: group.groupKey,
+          text: this.buildLessonGroupOptionLabel(group),
+        });
+        if (group.groupKey === selectedGroupKey) {
+          option.selected = true;
+        }
+      }
+    }
+
+    const currentGroup = filteredGroups.find((group) => group.groupKey === selectedGroupKey)
+      ?? filteredGroups[0]
+      ?? null;
+
+    toolbar.createEl("p", {
+      cls: "classpage-filter-toolbar__meta",
+      text: [
+        `과목 ${selectedSubject.subject || "과목 정보 없음"}`,
+        sortedSubjects.length > 1 ? `전체 과목 ${sortedSubjects.length}개` : "",
+        this.buildLessonScopeDescription(explorer, {
+          includeSubject: false,
+          includeSubjectCount: false,
+          includeCurrentGroup: false,
+        }),
+        filteredGroups.length > 0
+          ? `표시 ${filteredGroups.length}개 그룹 / 과목 전체 ${allGroups.length}개`
+          : "조건에 맞는 수업 그룹이 없습니다.",
+        currentGroup ? `확인 중: ${this.buildLessonGroupOptionLabel(currentGroup)}` : "",
+      ].filter(Boolean).join(" · "),
+    });
+
+    const qualityMessage = this.buildLessonStructuredFieldNotice(allGroups);
+    if (qualityMessage) {
+      card.createEl("p", {
+        cls: "classpage-filter-toolbar__meta",
+        text: qualityMessage,
+      });
+    }
+
+    subjectSelect.addEventListener("change", () => {
+      const nextSubject = sortedSubjects.find((subject) =>
+        this.getLessonSubjectSelectionValue(subject) === subjectSelect.value,
+      );
+      this.lessonSubjectSelection = subjectSelect.value;
+      this.lessonUnitFilter = "";
+      this.lessonDatePreset = "all";
+      this.lessonDateFilter = "";
+      this.lessonGroupSelection = this.getFilteredLessonGroups(nextSubject ?? selectedSubject)[0]?.groupKey
+        || nextSubject?.groupKey
+        || "";
+      this.render();
+    });
+
+    unitSelect?.addEventListener("change", () => {
+      this.lessonSubjectSelection = subjectSelect.value;
+      this.lessonUnitFilter = unitSelect?.value ?? "";
+      const nextSubject = sortedSubjects.find((subject) =>
+        this.getLessonSubjectSelectionValue(subject) === subjectSelect.value,
+      ) ?? selectedSubject;
+      if (this.lessonDatePreset === "specific" && this.lessonDateFilter.length === 0) {
+        this.lessonDateFilter = this.getLessonDateOptions(nextSubject)[0]?.value ?? "";
+      }
+      this.lessonGroupSelection = this.getPreferredLessonGroupSelection(nextSubject);
+      this.render();
+    });
+
+    datePresetSelect?.addEventListener("change", () => {
+      this.lessonSubjectSelection = subjectSelect.value;
+      this.lessonDatePreset = (datePresetSelect?.value as LessonDatePreset) ?? "all";
+      const nextSubject = sortedSubjects.find((subject) =>
+        this.getLessonSubjectSelectionValue(subject) === subjectSelect.value,
+      ) ?? selectedSubject;
+      if (this.lessonDatePreset === "specific") {
+        this.lessonDateFilter = this.lessonDateFilter
+          || this.getLessonDateOptions(nextSubject)[0]?.value
+          || "";
+      } else {
+        this.lessonDateFilter = "";
+      }
+      this.lessonGroupSelection = this.getPreferredLessonGroupSelection(nextSubject);
+      this.render();
+    });
+
+    dateSelect?.addEventListener("change", () => {
+      this.lessonSubjectSelection = subjectSelect.value;
+      this.lessonDateFilter = dateSelect?.value ?? "";
+      const nextSubject = sortedSubjects.find((subject) =>
+        this.getLessonSubjectSelectionValue(subject) === subjectSelect.value,
+      ) ?? selectedSubject;
+      this.lessonGroupSelection = this.getPreferredLessonGroupSelection(nextSubject);
+      this.render();
+    });
+
+    groupSelect.addEventListener("change", () => {
+      this.lessonSubjectSelection = subjectSelect.value;
+      this.lessonGroupSelection = groupSelect.value;
+      this.render();
+    });
+  }
+
+  private renderStarStudentFilterCard(
+    parent: HTMLElement,
+    ledger: StarModeLedger,
+    eventMap: Map<string, StarEvent[]>,
+  ): void {
+    const filteredTotals = this.getFilteredStarTotals(ledger, eventMap);
+    const filterCard = parent.createDiv({ cls: "classpage-card classpage-filter-card" });
+    filterCard.createEl("h3", {
+      cls: "classpage-card__title",
+      text: "학생별 별점 흐름 확인",
+    });
+    filterCard.createEl("p", {
+      cls: "classpage-filter-card__description",
+      text: "학생 이름이나 번호로 빠르게 찾고, 숨김 조정 반영 학생이나 최근 변동 학생만 좁혀 볼 수 있습니다. 상세 펼침은 학생 누적 점수와 최근 표시 이벤트 기준의 읽기 전용 미리보기입니다.",
+    });
+
+    const toolbar = filterCard.createDiv({ cls: "classpage-filter-toolbar" });
+    const inputWrap = toolbar.createDiv({ cls: "classpage-filter-input-wrap" });
+    const input = inputWrap.createEl("input", {
+      cls: "classpage-filter-input",
+      attr: {
+        type: "search",
+        placeholder: "이름, 번호, 반 검색",
+      },
+    });
+    input.value = this.starStudentQuery;
+
+    const actionGroup = toolbar.createDiv({ cls: "classpage-filter-pill-group" });
+    const applyButton = actionGroup.createEl("button", {
+      cls: "classpage-filter-pill is-primary",
+      text: "적용",
+      attr: { type: "button" },
+    });
+    const clearButton = actionGroup.createEl("button", {
+      cls: "classpage-filter-pill",
+      text: "초기화",
+      attr: { type: "button" },
+    });
+
+    const modeGroup = filterCard.createDiv({ cls: "classpage-filter-pill-group" });
+    this.renderFilterPill(
+      modeGroup,
+      "전체 보기",
+      this.starStudentFilterMode === "all",
+      () => {
+        this.starStudentFilterMode = "all";
+        this.render();
+      },
+    );
+    this.renderFilterPill(
+      modeGroup,
+      "숨김 조정 반영만",
+      this.starStudentFilterMode === "adjusted",
+      () => {
+        this.starStudentFilterMode = "adjusted";
+        this.render();
+      },
+    );
+    this.renderFilterPill(
+      modeGroup,
+      "최근 변동 학생",
+      this.starStudentFilterMode === "recent",
+      () => {
+        this.starStudentFilterMode = "recent";
+        this.render();
+      },
+    );
+    this.renderFilterPill(
+      modeGroup,
+      "최근 수동 조정",
+      this.starStudentFilterMode === "manual",
+      () => {
+        this.starStudentFilterMode = "manual";
+        this.render();
+      },
+    );
+
+    filterCard.createEl("p", {
+      cls: "classpage-filter-toolbar__meta",
+      text: [
+        `현재 ${filteredTotals.length}명 표시`,
+        `모드 ${this.getStarStudentFilterModeLabel()}`,
+        this.starStudentFilterMode === "recent" || this.starStudentFilterMode === "manual"
+          ? "최근 표시 이벤트 기준"
+          : "학생 누적 기준",
+      ].join(" · "),
+    });
+
+    const applyFilter = () => {
+      this.starStudentQuery = input.value.trim();
+      this.render();
+    };
+
+    applyButton.addEventListener("click", applyFilter);
+    clearButton.addEventListener("click", () => {
+      this.starStudentQuery = "";
+      this.starStudentFilterMode = "all";
+      this.render();
+    });
+    input.addEventListener("keydown", (event) => {
+      if (event.key !== "Enter") {
+        return;
+      }
+
+      event.preventDefault();
+      applyFilter();
+    });
+
+    this.renderStudentDrilldownCard(
+      parent,
+      "학생별 별점 흐름 상세",
+      filteredTotals.map((total) =>
+        this.buildStarStudentDrilldownItem(
+          total,
+          eventMap.get(total.studentKey) ?? [],
+          ledger.rules,
+        )
+      ),
+      "이름, 번호, 보기 모드를 다시 확인해 주세요.",
+      true,
+    );
+  }
+
+  private renderFilterPill(
+    parent: HTMLElement,
+    label: string,
+    isActive: boolean,
+    onClick: () => void,
+  ): void {
+    const button = parent.createEl("button", {
+      cls: `classpage-filter-pill${isActive ? " is-active" : ""}`,
+      text: label,
+      attr: { type: "button" },
+    });
+    button.addEventListener("click", onClick);
   }
 
   private renderStudentDrilldownItem(parent: HTMLElement, item: DrilldownItem): void {
@@ -1360,12 +1957,13 @@ class ClassPageView extends ItemView {
   }
 
   private buildLessonStudentDrilldownItem(student: LessonStudentResponse): DrilldownItem {
+    const followUp = this.normalizeLessonFollowUpValue(student.followUp);
     return {
       title: formatStudentLabel(student.student),
       meta: `정답 ${student.correctCount} / 오답 ${student.incorrectCount}`,
       summary: [
         student.assignmentStatus ? `복습/수행: ${student.assignmentStatus}` : "",
-        student.followUp ? `후속: ${student.followUp}` : "",
+        followUp ? `후속: ${followUp}` : "",
       ].filter(Boolean).join(" / ") || "수업 응답 상세 보기",
       fields: this.compactDrilldownFields([
         ["단원", student.lessonUnit],
@@ -1373,7 +1971,7 @@ class ClassPageView extends ItemView {
         ["오답 수", String(student.incorrectCount)],
         ["복습/수행 상태", student.assignmentStatus],
         ["헷갈린 부분", student.misconception],
-        ["후속 지도", student.followUp],
+        ["후속 지도", followUp],
         ["틀린 이유", student.incorrectReason],
         ["선생님께 하고 싶은 말", student.teacherMessage],
         ["개념 응답", this.buildConceptSummary(student)],
@@ -1386,16 +1984,22 @@ class ClassPageView extends ItemView {
     student: LessonSummaryAggregate["supportStudents"][number],
     response: LessonStudentResponse | null,
   ): DrilldownItem {
+    const followUp = this.normalizeLessonFollowUpValue(response?.followUp || "")
+      || "보충 설명 필요";
     return {
       title: formatStudentLabel(student.student),
-      meta: `정답 ${student.correctCount} / 오답 ${student.incorrectCount}`,
+      meta: [
+        this.getLessonFollowUpBadge(followUp),
+        `정답 ${student.correctCount} / 오답 ${student.incorrectCount}`,
+      ].filter(Boolean).join(" · "),
       summary: [
         student.assignmentStatus ? `복습/수행: ${student.assignmentStatus}` : "",
         student.misconception ? `헷갈린 부분: ${student.misconception}` : "",
       ].filter(Boolean).join(" / ") || "보충 지도 근거 보기",
-      tone: "warning",
+      tone: this.getLessonFollowUpTone(followUp) ?? "warning",
       fields: this.compactDrilldownFields([
         ["복습/수행 상태", student.assignmentStatus],
+        ["후속 지도", followUp],
         ["헷갈린 부분", student.misconception],
         ["틀린 이유", response?.incorrectReason || ""],
         ["선생님께 하고 싶은 말", response?.teacherMessage || ""],
@@ -1409,22 +2013,152 @@ class ClassPageView extends ItemView {
     result: LessonSummaryAggregate["studentResults"][number],
     response: LessonStudentResponse | null,
   ): DrilldownItem {
+    const followUp = this.normalizeLessonFollowUpValue(result.followUp);
     return {
       title: formatStudentLabel(result.student),
-      meta: `정답 ${result.correctCount} / 오답 ${result.incorrectCount}`,
+      meta: [
+        this.getLessonFollowUpBadge(followUp),
+        `정답 ${result.correctCount} / 오답 ${result.incorrectCount}`,
+      ].filter(Boolean).join(" · "),
       summary: [
         result.assignmentStatus ? `복습/수행: ${result.assignmentStatus}` : "",
-        result.followUp ? `후속 지도: ${result.followUp}` : "",
+        followUp ? `후속 지도: ${followUp}` : "",
       ].filter(Boolean).join(" / ") || "학생별 결과 보기",
+      tone: this.getLessonFollowUpTone(followUp),
       fields: this.compactDrilldownFields([
         ["복습/수행 상태", result.assignmentStatus],
-        ["후속 지도", result.followUp],
+        ["후속 지도", followUp],
         ["틀린 이유", response?.incorrectReason || ""],
         ["선생님께 하고 싶은 말", response?.teacherMessage || ""],
         ["개념 응답", response ? this.buildConceptSummary(response) : ""],
         ["분석 메모", response?.teacherNote || ""],
       ]),
     };
+  }
+
+  private buildLessonFollowUpDrilldownItems(
+    summary: LessonGroupSummary,
+    responseMap: Map<string, LessonStudentResponse>,
+  ): DrilldownItem[] {
+    const supportKeys = new Set(
+      summary.supportStudents
+        .map((student) => this.getStudentLookupKey(student.student))
+        .filter((key): key is string => key !== null),
+    );
+    const supportItems = summary.supportStudents
+      .slice()
+      .sort((left, right) => {
+        if (right.incorrectCount !== left.incorrectCount) {
+          return right.incorrectCount - left.incorrectCount;
+        }
+
+        return left.student.name.localeCompare(right.student.name, "ko-KR");
+      })
+      .map((student) =>
+        this.buildLessonSupportDrilldownItem(
+          student,
+          this.findLessonResponseByStudent(responseMap, student.student),
+        )
+      );
+    const extraItems = this.getSortedLessonStudentResults(summary)
+      .filter((result) => {
+        const key = this.getStudentLookupKey(result.student);
+        if (key && supportKeys.has(key)) {
+          return false;
+        }
+
+        return this.isUrgentLessonFollowUp(result.followUp);
+      })
+      .map((result) =>
+        this.buildStudentResultDrilldownItem(
+          result,
+          this.findLessonResponseByStudent(responseMap, result.student),
+        )
+      );
+
+    return [...supportItems, ...extraItems].slice(0, 8);
+  }
+
+  private getSortedLessonStudentResults(
+    summary: Pick<LessonGroupSummary, "studentResults">,
+  ): LessonSummaryAggregate["studentResults"] {
+    return summary.studentResults.slice().sort((left, right) => {
+      const priorityDiff = this.getLessonFollowUpPriority(left.followUp)
+        - this.getLessonFollowUpPriority(right.followUp);
+      if (priorityDiff !== 0) {
+        return priorityDiff;
+      }
+
+      if (right.incorrectCount !== left.incorrectCount) {
+        return right.incorrectCount - left.incorrectCount;
+      }
+
+      if (left.assignmentStatus !== right.assignmentStatus) {
+        return left.assignmentStatus.localeCompare(right.assignmentStatus, "ko-KR");
+      }
+
+      return left.student.name.localeCompare(right.student.name, "ko-KR");
+    });
+  }
+
+  private getLessonFollowUpBadge(followUp: string): string {
+    const normalized = this.normalizeLessonFollowUpValue(followUp);
+    if (!normalized) {
+      return "";
+    }
+
+    return normalized;
+  }
+
+  private getLessonFollowUpTone(followUp: string): RowTone | undefined {
+    const normalized = this.normalizeLessonFollowUpValue(followUp);
+    if (!normalized) {
+      return undefined;
+    }
+
+    if (normalized.includes("심화")) {
+      return "positive";
+    }
+
+    if (normalized.includes("보충") || normalized.includes("확인") || normalized.includes("재")) {
+      return "warning";
+    }
+
+    return undefined;
+  }
+
+  private getLessonFollowUpPriority(followUp: string): number {
+    const normalized = this.normalizeLessonFollowUpValue(followUp);
+    if (!normalized) {
+      return 2;
+    }
+
+    if (normalized.includes("보충")) {
+      return 0;
+    }
+
+    if (normalized.includes("확인") || normalized.includes("재")) {
+      return 1;
+    }
+
+    if (normalized.includes("심화")) {
+      return 3;
+    }
+
+    return 2;
+  }
+
+  private isUrgentLessonFollowUp(followUp: string): boolean {
+    return this.getLessonFollowUpPriority(followUp) <= 1;
+  }
+
+  private normalizeLessonFollowUpValue(followUp: string): string {
+    const normalized = followUp.trim();
+    if (!normalized || normalized === "미확인" || normalized === "정보 없음") {
+      return "";
+    }
+
+    return normalized;
   }
 
   private buildConceptSummary(student: LessonStudentResponse): string {
@@ -1455,6 +2189,1086 @@ class ClassPageView extends ItemView {
       .filter((item) => item.value.length > 0);
   }
 
+  private getLessonAvailableSummaries(summary: LessonSummaryAggregate): LessonSubjectSummary[] {
+    const subjects = summary.subjectSummaries.length > 0
+      ? summary.subjectSummaries
+      : [this.buildFallbackLessonSubjectSummary(summary)];
+
+    return this.getLessonAvailableSummariesFromSubjects(subjects);
+  }
+
+  private getLessonAvailableSummariesFromSubjects(
+    subjects: LessonSubjectSummary[],
+  ): LessonSubjectSummary[] {
+    return subjects
+      .slice()
+      .sort((left, right) => this.compareLessonGroupsForDisplay(left, right));
+  }
+
+  private getLessonSubjectSelectionValue(summary: LessonSubjectSummary): string {
+    return summary.subjectKey.trim()
+      || summary.subject.trim()
+      || summary.groupKey;
+  }
+
+  private getSelectedLessonSubjectSummary(summary: LessonSummaryAggregate): LessonSubjectSummary {
+    const availableSummaries = this.getLessonAvailableSummaries(summary);
+
+    return availableSummaries.find((item) =>
+      this.getLessonSubjectSelectionValue(item) === this.lessonSubjectSelection,
+    )
+      ?? availableSummaries.find((item) =>
+        item.groups.some((group) => group.groupKey === this.lessonGroupSelection)
+          || item.groupKey === this.lessonGroupSelection,
+      )
+      ?? availableSummaries.find((item) => item.subject === summary.subject)
+      ?? availableSummaries[0];
+  }
+
+  private getLessonExplorerState(summary: LessonSummaryAggregate): LessonExplorerState {
+    const availableSubjects = this.getLessonAvailableSummaries(summary);
+    const selectedSubject = this.getSelectedLessonSubjectSummary(summary);
+    return this.getLessonExplorerStateFromSubject(selectedSubject, availableSubjects);
+  }
+
+  private getLessonExplorerStateFromSubject(
+    selectedSubject: LessonSubjectSummary,
+    availableSubjects: LessonSubjectSummary[],
+  ): LessonExplorerState {
+    const allGroups = this.getSortedLessonGroups(selectedSubject);
+    const unitFilteredGroups = this.getUnitFilteredLessonGroups(selectedSubject);
+    const unitOptions = this.getLessonUnitOptions(selectedSubject);
+    const dateOptions = this.getLessonDateOptions(selectedSubject);
+    const filteredGroups = this.getFilteredLessonGroups(selectedSubject);
+    const selectedGroup = filteredGroups.find((item) => item.groupKey === this.lessonGroupSelection)
+      ?? filteredGroups.find((item) => item.groupKey === selectedSubject.groupKey)
+      ?? filteredGroups[0]
+      ?? null;
+
+    return {
+      availableSubjects,
+      selectedSubject,
+      allGroups,
+      unitFilteredGroups,
+      filteredGroups,
+      selectedGroup,
+      unitOptions,
+      dateOptions,
+    };
+  }
+
+  private getSelectedLessonSummary(summary: LessonSummaryAggregate): LessonGroupSummary {
+    const explorer = this.getLessonExplorerState(summary);
+
+    return explorer.selectedGroup
+      ?? explorer.allGroups[0]
+      ?? this.buildFallbackLessonGroupSummary(explorer.selectedSubject);
+  }
+
+  private buildFallbackLessonSubjectSummary(summary: LessonSummaryAggregate): LessonSubjectSummary {
+    const group = this.buildFallbackLessonGroupSummary(summary);
+
+    return {
+      ...group,
+      groups: [this.cloneLessonGroupSummary(group)],
+    };
+  }
+
+  private buildFallbackLessonGroupSummary(
+    summary: LessonSummaryAggregate | LessonSubjectSummary,
+  ): LessonGroupSummary {
+    const lessonUnit = summary.studentResponses[0]?.lessonUnit || "";
+    const unitLabel = "unitLabel" in summary && typeof summary.unitLabel === "string"
+      ? summary.unitLabel
+      : lessonUnit;
+    const lessonDate = "lessonDate" in summary && typeof summary.lessonDate === "string"
+      ? summary.lessonDate
+      : this.extractLessonDate(summary.periodLabel);
+    const periodOrder = "periodOrder" in summary && typeof summary.periodOrder === "number"
+      ? summary.periodOrder
+      : this.extractLessonPeriodOrder(summary.periodLabel);
+    const subjectKey = "subjectKey" in summary && typeof summary.subjectKey === "string"
+      ? summary.subjectKey
+      : this.buildLessonStructuredKey(summary.subject);
+    const unitKey = "unitKey" in summary && typeof summary.unitKey === "string"
+      ? summary.unitKey
+      : this.buildLessonStructuredKey(unitLabel);
+    const lessonKey = "lessonKey" in summary && typeof summary.lessonKey === "string"
+      ? summary.lessonKey
+      : this.buildLessonMachineKey(lessonDate, periodOrder, subjectKey, unitKey);
+
+    return {
+      groupKey: [summary.subject, summary.periodLabel, lessonUnit].filter(Boolean).join("|"),
+      lessonKey,
+      label: this.buildLessonGroupLabel(summary.subject, summary.periodLabel, unitLabel),
+      lessonDate,
+      periodOrder,
+      subjectKey,
+      unitKey,
+      unitLabel,
+      periodLabel: summary.periodLabel,
+      lessonUnit,
+      classroom: summary.classroom,
+      subject: summary.subject,
+      responseCount: summary.responseCount,
+      excludedResponseCount: summary.excludedResponseCount,
+      overview: { ...summary.overview },
+      difficultConcepts: summary.difficultConcepts.map((item) => ({ ...item })),
+      assignmentSummary: summary.assignmentSummary.map((item) => ({ ...item })),
+      supportStudents: summary.supportStudents.map((item) => ({
+        ...item,
+        student: { ...item.student },
+      })),
+      studentResults: summary.studentResults.map((item) => ({
+        ...item,
+        student: { ...item.student },
+      })),
+      studentResponses: summary.studentResponses.map((item) => ({
+        ...item,
+        student: { ...item.student },
+        concepts: item.concepts.map((concept) => ({ ...concept })),
+      })),
+    };
+  }
+
+  private getSortedLessonGroups(subject: LessonSubjectSummary): LessonGroupSummary[] {
+    const groups = subject.groups.length > 0
+      ? subject.groups
+      : [this.buildFallbackLessonGroupSummary(subject)];
+
+    return groups
+      .slice()
+      .sort((left, right) => this.compareLessonGroupsForDisplay(left, right));
+  }
+
+  private getUnitFilteredLessonGroups(subject: LessonSubjectSummary): LessonGroupSummary[] {
+    return this.getSortedLessonGroups(subject).filter((group) => {
+      if (
+        this.lessonUnitFilter.length > 0
+        && this.getLessonGroupUnitFilterValue(group) !== this.lessonUnitFilter
+      ) {
+        return false;
+      }
+
+      return true;
+    });
+  }
+
+  private getFilteredLessonGroups(subject: LessonSubjectSummary): LessonGroupSummary[] {
+    const groups = this.getUnitFilteredLessonGroups(subject);
+
+    switch (this.lessonDatePreset) {
+      case "recent-3":
+        return groups.slice(0, 3);
+      case "recent-5":
+        return groups.slice(0, 5);
+      case "specific":
+        return groups.filter((group) =>
+          this.lessonDateFilter.length === 0
+            || this.getLessonGroupDateFilterValue(group) === this.lessonDateFilter
+        );
+      default:
+        return groups;
+    }
+  }
+
+  private getLessonUnitOptions(subject: LessonSubjectSummary): LessonFilterOption[] {
+    const seen = new Set<string>();
+    const options: LessonFilterOption[] = [];
+
+    for (const group of this.getSortedLessonGroups(subject)) {
+      const value = this.getLessonGroupUnitFilterValue(group);
+      if (seen.has(value)) {
+        continue;
+      }
+
+      seen.add(value);
+      options.push({
+        value,
+        label: this.getLessonGroupUnitLabel(group),
+      });
+    }
+
+    return options;
+  }
+
+  private getLessonDateOptions(subject: LessonSubjectSummary): LessonFilterOption[] {
+    const seen = new Set<string>();
+    const options: LessonFilterOption[] = [];
+
+    for (const group of this.getUnitFilteredLessonGroups(subject)) {
+      const value = this.getLessonGroupDateFilterValue(group);
+      if (seen.has(value)) {
+        continue;
+      }
+
+      seen.add(value);
+      options.push({
+        value,
+        label: this.getLessonGroupDateLabel(group),
+      });
+    }
+
+    return options;
+  }
+
+  private getPreferredLessonGroupSelection(subject: LessonSubjectSummary): string {
+    const filteredGroups = this.getFilteredLessonGroups(subject);
+
+    return filteredGroups.find((group) => group.groupKey === this.lessonGroupSelection)?.groupKey
+      ?? filteredGroups.find((group) => group.groupKey === subject.groupKey)?.groupKey
+      ?? filteredGroups[0]?.groupKey
+      ?? "";
+  }
+
+  private getLessonDatePresetOptions(): LessonFilterOption[] {
+    return [
+      { value: "all", label: "전체 수업" },
+      { value: "recent-3", label: "최근 3개 수업" },
+      { value: "recent-5", label: "최근 5개 수업" },
+      { value: "specific", label: "특정 날짜" },
+    ];
+  }
+
+  private getLessonDatePresetLabel(): string {
+    switch (this.lessonDatePreset) {
+      case "recent-3":
+        return "최근 3개 수업";
+      case "recent-5":
+        return "최근 5개 수업";
+      case "specific":
+        return this.lessonDateFilter.length > 0 ? "특정 날짜" : "날짜 선택 필요";
+      default:
+        return "전체 수업";
+    }
+  }
+
+  private buildLessonScopeDescription(
+    explorer: LessonExplorerState,
+    options?: {
+      includeSubject?: boolean;
+      includeSubjectCount?: boolean;
+      includeCurrentGroup?: boolean;
+    },
+  ): string {
+    const parts = [
+      options?.includeSubject
+        ? `과목 ${explorer.selectedSubject.subject || "과목 정보 없음"}`
+        : "",
+      options?.includeSubjectCount === false
+        ? ""
+        : explorer.availableSubjects.length > 1
+          ? `과목 ${explorer.availableSubjects.length}개`
+          : "",
+      `단원 ${this.getLessonFilterOptionLabel(this.lessonUnitFilter, explorer.unitOptions, "전체 단원")}`,
+      `범위 ${this.getLessonDateScopeLabel(explorer.dateOptions)}`,
+      explorer.filteredGroups.length !== explorer.unitFilteredGroups.length
+        ? `표시 ${explorer.filteredGroups.length}개 그룹`
+        : explorer.unitFilteredGroups.length !== explorer.allGroups.length
+          ? `단원 안 ${explorer.unitFilteredGroups.length}개 그룹`
+          : explorer.allGroups.length > 1
+            ? `과목 전체 ${explorer.allGroups.length}개 그룹`
+            : "",
+      options?.includeCurrentGroup === false
+        ? ""
+        : explorer.selectedGroup
+          ? `선택 ${this.buildLessonGroupOptionLabel(explorer.selectedGroup)}`
+          : "조건에 맞는 수업 그룹이 없습니다.",
+    ];
+
+    return parts.filter(Boolean).join(" · ");
+  }
+
+  private getLessonDateScopeLabel(dateOptions: LessonFilterOption[]): string {
+    if (this.lessonDatePreset === "specific") {
+      return this.getLessonFilterOptionLabel(this.lessonDateFilter, dateOptions, "날짜 선택 필요");
+    }
+
+    return this.getLessonDatePresetLabel();
+  }
+
+  private getLessonFilterOptionLabel(
+    value: string,
+    options: LessonFilterOption[],
+    allLabel: string,
+  ): string {
+    if (!value) {
+      return allLabel;
+    }
+
+    return options.find((option) => option.value === value)?.label ?? allLabel;
+  }
+
+  private getLessonGroupUnitFilterValue(
+    summary: Pick<LessonGroupSummary, "unitKey" | "unitLabel" | "lessonUnit">,
+  ): string {
+    return summary.unitKey.trim()
+      || this.buildLessonStructuredKey(summary.unitLabel || summary.lessonUnit || "")
+      || LESSON_FILTER_MISSING_UNIT;
+  }
+
+  private getLessonGroupUnitLabel(
+    summary: Pick<LessonGroupSummary, "unitLabel" | "lessonUnit">,
+  ): string {
+    return summary.unitLabel.trim() || summary.lessonUnit.trim() || "단원 정보 없음";
+  }
+
+  private getLessonGroupDateFilterValue(
+    summary: Pick<LessonGroupSummary, "lessonDate" | "periodLabel">,
+  ): string {
+    return summary.lessonDate.trim()
+      || this.extractLessonDate(summary.periodLabel)
+      || LESSON_FILTER_MISSING_DATE;
+  }
+
+  private getLessonGroupDateLabel(
+    summary: Pick<LessonGroupSummary, "lessonDate" | "periodLabel">,
+  ): string {
+    return summary.lessonDate.trim()
+      || this.extractLessonDate(summary.periodLabel)
+      || "날짜 정보 없음";
+  }
+
+  private buildLessonStructuredFieldNotice(groups: LessonGroupSummary[]): string {
+    const missingUnitCount = groups.filter((group) =>
+      !group.unitLabel.trim() && !group.lessonUnit.trim()
+    ).length;
+    const missingDateCount = groups.filter((group) =>
+      !group.lessonDate.trim() && !this.extractLessonDate(group.periodLabel)
+    ).length;
+    const parts = [
+      missingUnitCount > 0 ? `단원 정보 없음 ${missingUnitCount}개` : "",
+      missingDateCount > 0 ? `날짜 정보 없음 ${missingDateCount}개` : "",
+    ].filter(Boolean);
+
+    if (parts.length === 0) {
+      return "";
+    }
+
+    return `일부 수업은 ${parts.join(" / ")}라서 필터에서 '정보 없음'으로 묶여 보일 수 있습니다.`;
+  }
+
+  private cloneLessonGroupSummary(summary: LessonGroupSummary): LessonGroupSummary {
+    return {
+      ...summary,
+      overview: { ...summary.overview },
+      difficultConcepts: summary.difficultConcepts.map((item) => ({ ...item })),
+      assignmentSummary: summary.assignmentSummary.map((item) => ({ ...item })),
+      supportStudents: summary.supportStudents.map((item) => ({
+        ...item,
+        student: { ...item.student },
+      })),
+      studentResults: summary.studentResults.map((item) => ({
+        ...item,
+        student: { ...item.student },
+      })),
+      studentResponses: summary.studentResponses.map((item) => ({
+        ...item,
+        student: { ...item.student },
+        concepts: item.concepts.map((concept) => ({ ...concept })),
+      })),
+    };
+  }
+
+  private buildLessonGroupLabel(subject: string, periodLabel: string, lessonUnit: string): string {
+    const parts = [subject, periodLabel];
+    if (lessonUnit && !periodLabel.includes(lessonUnit)) {
+      parts.push(lessonUnit);
+    }
+
+    return parts.filter(Boolean).join(" · ") || "수업 그룹";
+  }
+
+  private buildLessonGroupOptionLabel(summary: LessonGroupSummary): string {
+    const parts = [
+      this.getLessonGroupDateLabel(summary),
+      summary.periodOrder != null ? `${summary.periodOrder}교시` : "",
+      this.getLessonGroupUnitLabel(summary),
+    ].filter(Boolean);
+
+    return parts.length > 0
+      ? parts.join(" · ")
+      : summary.label || summary.periodLabel || summary.groupKey;
+  }
+
+  private renderLessonEmptySelectionCard(
+    parent: HTMLElement,
+    selectedSubject: LessonSubjectSummary,
+    unitOptions: LessonFilterOption[],
+    dateOptions: LessonFilterOption[],
+  ): void {
+    const card = parent.createDiv({ cls: "classpage-card classpage-empty-card" });
+    card.createEl("h3", {
+      cls: "classpage-card__title",
+      text: "조건에 맞는 수업 그룹이 없습니다",
+    });
+    card.createEl("p", {
+      cls: "classpage-empty-card__message",
+      text: "선택한 과목 안에서 지금 조건에 맞는 수업 그룹이 없습니다. 최근 수업 범위를 넓히거나 단원, 날짜 선택을 다시 확인해 주세요.",
+    });
+    card.createEl("p", {
+      cls: "classpage-empty-card__detail",
+      text: [
+        `과목 ${selectedSubject.subject || "과목 정보 없음"}`,
+        `단원 ${this.getLessonFilterOptionLabel(this.lessonUnitFilter, unitOptions, "전체 단원")}`,
+        `범위 ${this.getLessonDateScopeLabel(dateOptions)}`,
+      ].join(" · "),
+    });
+    card.createEl("p", {
+      cls: "classpage-empty-card__detail",
+      text: this.lessonDatePreset === "specific"
+        ? "특정 날짜 대신 최근 3개 수업이나 전체 수업으로 넓혀 보면 더 빨리 찾을 수 있습니다."
+        : "조건을 조금 넓혀 보면 최근 수업 흐름을 더 빠르게 다시 확인할 수 있습니다.",
+    });
+  }
+
+  private compareLessonGroupsForDisplay(
+    left: Pick<LessonGroupSummary, "lessonDate" | "periodOrder" | "lessonKey" | "label">,
+    right: Pick<LessonGroupSummary, "lessonDate" | "periodOrder" | "lessonKey" | "label">,
+  ): number {
+    if (left.lessonDate !== right.lessonDate) {
+      return right.lessonDate.localeCompare(left.lessonDate);
+    }
+
+    if ((left.periodOrder ?? -1) !== (right.periodOrder ?? -1)) {
+      return (right.periodOrder ?? -1) - (left.periodOrder ?? -1);
+    }
+
+    if (left.lessonKey !== right.lessonKey) {
+      return left.lessonKey.localeCompare(right.lessonKey);
+    }
+
+    return left.label.localeCompare(right.label);
+  }
+
+  private buildLessonStructuredKey(value: string): string {
+    return value.trim().toLowerCase().replace(/\s+/g, "-").replace(/[|/\\]+/g, "-");
+  }
+
+  private buildLessonMachineKey(
+    lessonDate: string,
+    periodOrder: number | null,
+    subjectKey: string,
+    unitKey: string,
+  ): string {
+    return [
+      lessonDate || "date-missing",
+      periodOrder != null ? `p${periodOrder}` : "p0",
+      subjectKey || "subject-missing",
+      unitKey || "unit-missing",
+    ].join("|");
+  }
+
+  private extractLessonDate(value: string): string {
+    const match = value.match(/\d{4}-\d{2}-\d{2}/);
+    return match ? match[0] : "";
+  }
+
+  private extractLessonPeriodOrder(value: string): number | null {
+    const periodMatch = value.match(/(\d+)\s*교시/);
+    if (periodMatch) {
+      return Number(periodMatch[1]);
+    }
+
+    const numericMatch = value.match(/(\d+)/);
+    return numericMatch ? Number(numericMatch[1]) : null;
+  }
+
+  private buildStarRecentEventMap(events: StarEvent[]): Map<string, StarEvent[]> {
+    const map = new Map<string, StarEvent[]>();
+
+    for (const event of events) {
+      const list = map.get(event.studentKey) ?? [];
+      list.push(event);
+      map.set(event.studentKey, list);
+    }
+
+    return map;
+  }
+
+  private getFilteredStarTotals(
+    ledger: StarModeLedger,
+    eventMap: Map<string, StarEvent[]>,
+  ): StarStudentTotal[] {
+    const query = normalizeLookupText(this.starStudentQuery);
+    const baseTotals = this.getStarTotalsForFilterMode(ledger, eventMap);
+
+    return baseTotals.filter((total) => {
+      if (!query) {
+        return true;
+      }
+
+      const haystack = normalizeLookupText([
+        total.student.classroom,
+        total.student.number,
+        total.student.name,
+      ].join(" "));
+
+      return haystack.includes(query);
+    });
+  }
+
+  private getStarTotalsForFilterMode(
+    ledger: StarModeLedger,
+    eventMap: Map<string, StarEvent[]>,
+  ): StarStudentTotal[] {
+    switch (this.starStudentFilterMode) {
+      case "adjusted":
+        return sortStarTotalsByHiddenAdjustment(ledger.totals)
+          .filter((total) => total.hiddenAdjustmentTotal !== 0);
+      case "recent":
+        return this.sortStarTotalsByRecentPreview(ledger.totals, eventMap)
+          .filter((total) => (eventMap.get(total.studentKey) ?? []).length > 0);
+      case "manual":
+        return this.sortStarTotalsByRecentPreview(ledger.totals, eventMap, (event) => event.source === "manual")
+          .filter((total) =>
+            (eventMap.get(total.studentKey) ?? []).some((event) => event.source === "manual")
+          );
+      default:
+        return sortStarTotals(ledger.totals);
+    }
+  }
+
+  private sortStarTotalsByRecentPreview(
+    totals: StarStudentTotal[],
+    eventMap: Map<string, StarEvent[]>,
+    predicate?: (event: StarEvent) => boolean,
+  ): StarStudentTotal[] {
+    return totals.slice().sort((left, right) => {
+      const leftEvents = (eventMap.get(left.studentKey) ?? []).filter((event) =>
+        predicate ? predicate(event) : true
+      );
+      const rightEvents = (eventMap.get(right.studentKey) ?? []).filter((event) =>
+        predicate ? predicate(event) : true
+      );
+      const leftTime = leftEvents[0]?.occurredAt ?? "";
+      const rightTime = rightEvents[0]?.occurredAt ?? "";
+
+      if (leftTime !== rightTime) {
+        return rightTime.localeCompare(leftTime);
+      }
+
+      if (rightEvents.length !== leftEvents.length) {
+        return rightEvents.length - leftEvents.length;
+      }
+
+      return right.total - left.total;
+    });
+  }
+
+  private getStarStudentFilterModeLabel(): string {
+    switch (this.starStudentFilterMode) {
+      case "adjusted":
+        return "숨김 조정 반영 학생";
+      case "recent":
+        return "최근 변동 학생";
+      case "manual":
+        return "최근 수동 조정";
+      default:
+        return "전체 학생";
+    }
+  }
+
+  private findStarRuleSummary(
+    ledger: StarModeLedger,
+    ruleId: string,
+  ): StarRuleEventSummary | null {
+    return ledger.ruleSummary.find((item) => item.ruleId === ruleId) ?? null;
+  }
+
+  private buildStarRuleSummaryRows(
+    ledger: StarModeLedger,
+    rules: StarRuleSettings[],
+  ): DetailRow[] {
+    const knownRuleIds = new Set(rules.map((rule) => rule.ruleId));
+    const rows = rules.map((rule) => this.buildStarRuleSummaryRow(rule, this.findStarRuleSummary(ledger, rule.ruleId)));
+    const fallbackRows = ledger.ruleSummary
+      .filter((item) => !knownRuleIds.has(item.ruleId))
+      .map((item) => this.buildFallbackStarRuleSummaryRow(item));
+
+    return [...rows, ...fallbackRows].sort((left, right) => {
+      const leftCount = parseLeadingNumber(left.meta);
+      const rightCount = parseLeadingNumber(right.meta);
+      if (rightCount !== leftCount) {
+        return rightCount - leftCount;
+      }
+
+      return left.title.localeCompare(right.title, "ko-KR");
+    });
+  }
+
+  private buildStarRuleSummaryRow(
+    rule: StarRuleSettings,
+    summary: StarRuleEventSummary | null,
+  ): DetailRow {
+    const automaticCount = summary?.automaticCount ?? 0;
+    const manualCount = summary?.manualCount ?? 0;
+    const eventCount = summary?.eventCount ?? 0;
+
+    return {
+      title: rule.label,
+      meta: `${eventCount}건`,
+      description: [
+        `${getStarVisibilityLabel(rule.visibility)} · ${getStarCategoryLabel(rule.category)}`,
+        automaticCount > 0 ? `자동 ${automaticCount}건` : "",
+        manualCount > 0 ? `수동 ${manualCount}건` : "",
+        getStarRuleSourceSummary(rule.sources),
+      ].filter(Boolean).join(" / "),
+      tone: rule.visibility === "teacher" || rule.delta < 0
+        ? "warning"
+        : eventCount > 0
+          ? "positive"
+          : undefined,
+    };
+  }
+
+  private buildFallbackStarRuleSummaryRow(summary: StarRuleEventSummary): DetailRow {
+    return {
+      title: summary.label || summary.ruleId,
+      meta: `${summary.eventCount}건`,
+      description: [
+        `${getStarVisibilityLabel(summary.visibility)} · ${getStarCategoryLabel(summary.category)}`,
+        summary.automaticCount > 0 ? `자동 ${summary.automaticCount}건` : "",
+        summary.manualCount > 0 ? `수동 ${summary.manualCount}건` : "",
+        `ruleId ${summary.ruleId}`,
+      ].filter(Boolean).join(" / "),
+      tone: summary.visibility === "teacher" ? "warning" : summary.eventCount > 0 ? "positive" : undefined,
+    };
+  }
+
+  private buildStarStudentFlowRows(
+    ledger: StarModeLedger,
+    eventMap: Map<string, StarEvent[]>,
+  ): DetailRow[] {
+    const recentStudents = this.sortStarTotalsByRecentPreview(ledger.totals, eventMap)
+      .filter((total) => (eventMap.get(total.studentKey) ?? []).length > 0)
+      .slice(0, 4);
+    const recentManualStudents = this.sortStarTotalsByRecentPreview(
+      ledger.totals,
+      eventMap,
+      (event) => event.source === "manual",
+    )
+      .filter((total) =>
+        (eventMap.get(total.studentKey) ?? []).some((event) => event.source === "manual")
+      )
+      .slice(0, 4);
+    const adjustedStudents = sortStarTotalsByHiddenAdjustment(ledger.totals)
+      .filter((total) => total.hiddenAdjustmentTotal !== 0)
+      .slice(0, 4);
+
+    return [
+      {
+        title: "최근 변동이 보이는 학생",
+        meta: recentStudents.length > 0 ? `${recentStudents.length}명` : "없음",
+        description: recentStudents.length > 0
+          ? recentStudents
+              .map((total) =>
+                `${formatStudentLabel(total.student)} (${this.buildStarRecentEventSummary(
+                  eventMap.get(total.studentKey) ?? [],
+                  ledger.rules,
+                )})`
+              )
+              .join(" / ")
+          : "최근 표시 이벤트에 잡힌 학생이 아직 없습니다.",
+      },
+      {
+        title: "최근 수동 조정이 보이는 학생",
+        meta: recentManualStudents.length > 0 ? `${recentManualStudents.length}명` : "없음",
+        description: recentManualStudents.length > 0
+          ? `${recentManualStudents
+              .map((total) =>
+                `${formatStudentLabel(total.student)} (${this.buildStarRecentEventSummary(
+                  (eventMap.get(total.studentKey) ?? []).filter((event) => event.source === "manual"),
+                  ledger.rules,
+                )})`
+              )
+              .join(" / ")} / 최근 표시 이벤트 안에서만 보입니다.`
+          : "최근 표시 이벤트 안에서 수동 조정이 보이는 학생이 없습니다.",
+      },
+      {
+        title: "숨김 조정이 반영된 학생",
+        meta: adjustedStudents.length > 0 ? `${adjustedStudents.length}명` : "없음",
+        description: adjustedStudents.length > 0
+          ? adjustedStudents
+              .map((total) => {
+                const latestEvent = (eventMap.get(total.studentKey) ?? [])[0];
+                const previewLabel = latestEvent
+                  ? this.buildCompactStarEventPreview(latestEvent, ledger.rules)
+                  : `최근 미리보기 없음 / 총 ${formatSignedPoints(total.total)}`;
+
+                return `${formatStudentLabel(total.student)} (선생님 조정 ${formatSignedPoints(total.hiddenAdjustmentTotal)} / ${previewLabel})`;
+              })
+              .join(" / ")
+          : "현재 숨김 조정이 반영된 학생이 없습니다.",
+        tone: adjustedStudents.some((total) => total.hiddenAdjustmentTotal < 0) ? "warning" : undefined,
+      },
+    ];
+  }
+
+  private buildStarStudentDrilldownItem(
+    total: StarStudentTotal,
+    previewEvents: StarEvent[],
+    rules: StarRuleSettings[],
+  ): DrilldownItem {
+    const manualPreviewCount = previewEvents.filter((event) => event.source === "manual").length;
+    return {
+      title: formatStudentLabel(total.student),
+      meta: [
+        `총 ${formatSignedPoints(total.total)}`,
+        previewEvents.length > 0 ? `최근 ${previewEvents.length}건` : "",
+      ].filter(Boolean).join(" · "),
+      summary: [
+        `학생 공개 ${formatSignedPoints(total.visibleTotal)}`,
+        `선생님 조정 ${formatSignedPoints(total.hiddenAdjustmentTotal)}`,
+        manualPreviewCount > 0 ? `최근 수동 조정 ${manualPreviewCount}건` : "",
+        previewEvents.length > 0
+          ? `최근 흐름: ${this.buildStarRecentEventSummary(previewEvents, rules)}`
+          : "최근 표시 이벤트가 없습니다.",
+      ].filter(Boolean).join(" / "),
+      tone: total.hiddenAdjustmentTotal < 0
+        ? "warning"
+        : total.hiddenAdjustmentTotal > 0
+          ? "positive"
+          : undefined,
+      fields: this.compactDrilldownFields([
+        ["학생 공개 누적", formatSignedPoints(total.visibleTotal)],
+        ["선생님 조정 합계", formatSignedPoints(total.hiddenAdjustmentTotal)],
+        ["전체 이벤트 수", `${total.eventCount}건`],
+        ...previewEvents.slice(0, 4).map((event, index) => ([
+          `최근 이벤트 ${index + 1}`,
+          this.buildCompactStarEventPreview(event, rules),
+        ] as const)),
+      ]),
+    };
+  }
+
+  private buildStarRecentEventSummary(
+    previewEvents: StarEvent[],
+    rules: StarRuleSettings[],
+  ): string {
+    if (previewEvents.length === 0) {
+      return "최근 이벤트 없음";
+    }
+
+    return previewEvents
+      .slice(0, 2)
+      .map((event) => {
+        const rule = rules.find((item) => item.ruleId === event.ruleId);
+        return [
+          formatDateLabel(event.occurredAt, "시각 정보 없음"),
+          `${rule?.label ?? event.ruleId} ${formatSignedPoints(event.delta)}`,
+        ].join(" ");
+      })
+      .join(" / ");
+  }
+
+  private buildCompactStarEventPreview(
+    event: StarEvent,
+    rules: StarRuleSettings[],
+  ): string {
+    const rule = rules.find((item) => item.ruleId === event.ruleId);
+
+    return [
+      formatDateLabel(event.occurredAt, "시각 정보 없음"),
+      `${rule?.label ?? event.ruleId} ${formatSignedPoints(event.delta)}`,
+      getStarEventSourceLabel(event),
+      event.visibility === "teacher" ? "선생님 확인 전용" : "",
+      event.note,
+    ].filter(Boolean).join(" / ");
+  }
+
+  private buildTeacherContextSummary(
+    teacherData: TeacherPageData | null,
+  ): {
+    badgeText: string;
+    focusLabel: string;
+    classroomLabel: string;
+    meta: string;
+    description: string;
+  } {
+    const focusLabel = this.getTeacherFocusLabel(this.teacherFocusMode);
+    const candidates: Array<TeacherAggregateState | null> = [
+      this.teacherFocusMode === "class" ? teacherData?.classSummary ?? null : null,
+      this.teacherFocusMode === "lesson" ? teacherData?.lessonSummary ?? null : null,
+      this.teacherFocusMode === "star" ? teacherData?.starLedger ?? null : null,
+      teacherData?.classSummary ?? null,
+      teacherData?.lessonSummary ?? null,
+      teacherData?.starLedger ?? null,
+    ];
+    const sourceState = candidates.find((item) =>
+      item?.status === "loaded" && item.data,
+    ) ?? null;
+
+    if (!sourceState || !sourceState.data) {
+      return {
+        badgeText: "학급 정보 없음",
+        focusLabel,
+        classroomLabel: "학급 정보 확인 필요",
+        meta: `현재 화면: ${focusLabel}`,
+        description:
+          "학급, 수업, 별점 집계 중 하나에 학급 정보가 들어오면 여기와 각 섹션 헤더에 함께 표시됩니다.",
+      };
+    }
+
+    const lessonExplorer = sourceState.data.type === "lesson-summary"
+      ? this.getLessonExplorerState(sourceState.data)
+      : null;
+    const lessonDisplayTarget = lessonExplorer?.selectedGroup
+      ?? lessonExplorer?.selectedSubject
+      ?? null;
+    const classroomLabel = getAggregateDisplayClassroom(
+      sourceState.data.type === "lesson-summary"
+        ? lessonDisplayTarget ?? sourceState.data
+        : sourceState.data,
+    ) || "학급 정보 확인 필요";
+    const selectedLessonSubject = lessonExplorer
+      ? lessonExplorer.selectedSubject
+      : null;
+    const selectedLessonGroup = lessonExplorer
+      ? lessonExplorer.selectedGroup
+      : null;
+    const lessonMetaLabel = selectedLessonGroup?.label
+      ?? (lessonExplorer
+        ? [
+            selectedLessonSubject?.subject
+              || (sourceState.data.type === "lesson-summary" ? sourceState.data.subject : ""),
+            this.buildLessonScopeDescription(lessonExplorer, {
+              includeSubject: false,
+              includeSubjectCount: false,
+              includeCurrentGroup: false,
+            }),
+            "조건에 맞는 수업 그룹 없음",
+          ].filter(Boolean).join(" · ")
+        : sourceState.data.type === "lesson-summary"
+          ? sourceState.data.subject
+          : "");
+    const meta = [
+      `현재 화면: ${focusLabel}`,
+      `기준: ${this.getTeacherAggregateLabel(sourceState.kind)}`,
+      lessonMetaLabel,
+      sourceState.data.type === "lesson-summary"
+        ? ""
+        : sourceState.data.periodLabel,
+    ].filter(Boolean).join(" · ");
+
+    const description = sourceState.data.type === "star-ledger"
+      ? sourceState.data.classroom
+        ? "별점은 공개 점수와 선생님 확인 전용 조정을 분리해 읽는 확인 화면입니다."
+        : "별점 집계에 학급 정보가 비어 있으면 학생 목록의 공통 학급을 찾아 화면에 보완 표시합니다."
+      : sourceState.data.type === "lesson-summary"
+        ? "수업 카드와 drill-down은 선택한 과목 안의 수업 그룹 기준으로 이해도, 복습/수행, 후속 지도를 먼저 보도록 정리합니다."
+        : "학급 카드와 drill-down은 이 학급의 정서 상태, 목표 달성, 도움이 필요한 학생을 먼저 보여줍니다.";
+
+    return {
+      badgeText: classroomLabel,
+      focusLabel,
+      classroomLabel,
+      meta,
+      description,
+    };
+  }
+
+  private getTeacherFocusLabel(mode: TeacherFocusMode): string {
+    switch (mode) {
+      case "class":
+        return "학급";
+      case "lesson":
+        return "수업";
+      case "star":
+        return "별점";
+      default:
+        return "전체 보기";
+    }
+  }
+
+  private getTeacherAggregateLabel(kind: TeacherAggregateState["kind"]): string {
+    switch (kind) {
+      case "class":
+        return "학급 집계";
+      case "lesson":
+        return "수업 집계";
+      case "star":
+        return "별점 집계";
+    }
+  }
+
+  private getSourceClassroomBadge(sourceState: TeacherAggregateState | null): string | undefined {
+    if (!sourceState || sourceState.status !== "loaded" || !sourceState.data) {
+      return undefined;
+    }
+
+    const lessonExplorer = sourceState.data.type === "lesson-summary"
+      ? this.getLessonExplorerState(sourceState.data)
+      : null;
+    return getAggregateDisplayClassroom(
+      sourceState.data.type === "lesson-summary"
+        ? lessonExplorer?.selectedGroup ?? lessonExplorer?.selectedSubject ?? sourceState.data
+        : sourceState.data,
+    ) || undefined;
+  }
+
+  private buildLessonPriorityRows(summary: LessonSummaryAggregate | LessonGroupSummary): DetailRow[] {
+    const partialCount = this.getAggregateCountByLabel(summary.assignmentSummary, "부분 완료");
+    const incompleteCount = this.getAggregateCountByLabel(summary.assignmentSummary, "미완료");
+    const needsFollowUpCount = partialCount + incompleteCount;
+    const supportPreview = summary.supportStudents
+      .slice(0, 3)
+      .map((student) => formatStudentLabel(student.student))
+      .join(", ");
+    const topConcept = summary.difficultConcepts[0];
+
+    return [
+      {
+        title: "보충 설명이 필요한 학생",
+        meta: summary.supportStudents.length > 0 ? `${summary.supportStudents.length}명` : "없음",
+        description: summary.supportStudents.length > 0
+          ? [
+              supportPreview ? `먼저 볼 학생: ${supportPreview}` : "",
+              summary.supportStudents[0]?.misconception
+                ? `핵심 오개념: ${summary.supportStudents[0].misconception}`
+                : "",
+            ].filter(Boolean).join(" / ")
+          : "현재는 보충 설명 우선 학생이 없습니다.",
+        tone: summary.supportStudents.length > 0 ? "warning" : "positive",
+      },
+      {
+        title: "복습/수행 미완료 확인",
+        meta: needsFollowUpCount > 0 ? `${needsFollowUpCount}명` : "없음",
+        description: needsFollowUpCount > 0
+          ? [
+              incompleteCount > 0 ? `미완료 ${incompleteCount}명` : "",
+              partialCount > 0 ? `부분 완료 ${partialCount}명` : "",
+              summary.overview.assignmentCompletionLabel
+                ? `전체 흐름: ${summary.overview.assignmentCompletionLabel}`
+                : "",
+            ].filter(Boolean).join(" / ")
+          : `전체 흐름: ${summary.overview.assignmentCompletionLabel || "미분류"}`,
+        tone: needsFollowUpCount > 0 ? "warning" : undefined,
+      },
+      {
+        title: "재설명 필요한 개념",
+        meta: topConcept ? `${topConcept.count}명` : "없음",
+        description: topConcept
+          ? [
+              topConcept.concept,
+              topConcept.averageUnderstanding,
+              topConcept.note,
+            ].filter(Boolean).join(" / ")
+          : "현재 다시 설명이 필요한 대표 개념이 없습니다.",
+        tone: topConcept ? "warning" : undefined,
+      },
+    ];
+  }
+
+  private getAggregateCountByLabel(items: AggregateCountItem[], label: string): number {
+    return items.find((item) => item.label === label)?.count ?? 0;
+  }
+
+  private buildStarOperationRows(
+    ledger: StarModeLedger,
+    visibleRules: StarRuleSettings[],
+    teacherOnlyRules: StarRuleSettings[],
+    manualRules: StarRuleSettings[],
+  ): DetailRow[] {
+    const customDeltaRules = manualRules.filter((rule) => rule.allowCustomDelta);
+
+    return [
+      {
+        title: "지금 확인 가능한 내용",
+        meta: "읽기 전용",
+        description:
+          "활성 규칙, 공개/비공개 구분, 최근 이벤트, 학생별 누적 점수, 숨김 조정 합계를 이 화면에서 확인합니다.",
+      },
+      {
+        title: "공개/비공개 기준",
+        meta: `학생 공개 ${visibleRules.length}개 / 선생님 확인 ${teacherOnlyRules.length}개`,
+        description:
+          "학생 공개 점수와 선생님 확인 전용 조정은 분리해 읽습니다. 숨김 조정은 학생 공개 합계에 섞지 않습니다.",
+      },
+      {
+        title: "수동 조정 기준",
+        meta: `수동 규칙 ${manualRules.length}개`,
+        description: [
+          "운영 규칙: 자동화 설정에서 관리",
+          "입력 위치: 별점 수동 조정 시트",
+          customDeltaRules.length > 0
+            ? `행별 점수 덮어쓰기 허용 ${customDeltaRules.length}개`
+            : "행별 점수 덮어쓰기 허용 없음",
+        ].join(" / "),
+      },
+      {
+        title: "일괄 부여 흐름",
+        meta: ledger.sourceSummary.manual > 0
+          ? `현재 반영 ${ledger.sourceSummary.manual}건`
+          : "입력 없음",
+        description:
+          "별점 일괄 부여 시트에서 준비한 행이 Apps Script를 거쳐 별점 수동 조정 이벤트로 반영되면 이 화면에 나타납니다.",
+      },
+      {
+        title: "학급 표시 기준",
+        meta: ledger.classroom ? "집계 제공" : "표시 보완",
+        description: ledger.classroom
+          ? "별점 집계 파일의 학급 값을 우선 표시합니다."
+          : "별점 집계 파일에 학급 값이 없으면 학생 목록의 공통 학급을 찾아 보완 표시합니다.",
+      },
+      {
+        title: "규칙별 발생 집계",
+        meta: ledger.ruleSummary.length > 0 ? "정확 집계" : "부분 표시",
+        description: ledger.ruleSummary.length > 0
+          ? "최신 집계 파일이면 규칙별 총 발생 수와 자동/수동 분리를 정확히 보여줍니다."
+          : "오래된 집계 파일이면 일부 규칙은 최근 표시 이벤트 중심의 미리보기만 보일 수 있습니다.",
+      },
+      {
+        title: "아직 이 화면에서 하지 않는 것",
+        meta: "베타 범위 밖",
+        description:
+          "Google Sheets 직접 쓰기, 규칙 편집, 전체 기간 필터와 다중 차시 drill-down은 아직 넣지 않았습니다.",
+        tone: "warning",
+      },
+    ];
+  }
+
+  private buildStarRuleRow(
+    rule: StarRuleSettings,
+    summary: StarRuleEventSummary | null,
+  ): DetailRow {
+    return {
+      title: rule.label,
+      meta: [
+        formatSignedPoints(rule.delta),
+        getStarVisibilityLabel(rule.visibility),
+        summary ? `${summary.eventCount}건` : "",
+      ].filter(Boolean).join(" · "),
+      description: [
+        getStarCategoryLabel(rule.category),
+        summary && summary.automaticCount > 0 ? `자동 ${summary.automaticCount}건` : "",
+        summary && summary.manualCount > 0 ? `수동 ${summary.manualCount}건` : "",
+        getStarRuleSourceSummary(rule.sources),
+        getStarAutoCriteriaSummary(rule.autoCriteria),
+        rule.sources.includes("manual")
+          ? rule.allowCustomDelta
+            ? "행별 점수 덮어쓰기 허용"
+            : "행별 점수는 기본값 고정"
+          : "자동 적립 전용",
+        rule.description,
+      ].filter(Boolean).join(" / "),
+      tone: rule.delta < 0 ? "warning" : "positive",
+    };
+  }
+
+  private buildStarAdjustmentTotalRow(total: StarStudentTotal): DetailRow {
+    return {
+      title: formatStudentLabel(total.student),
+      meta: `선생님 조정 ${formatSignedPoints(total.hiddenAdjustmentTotal)}`,
+      description: [
+        `총 ${formatSignedPoints(total.total)}`,
+        `학생 공개 ${formatSignedPoints(total.visibleTotal)}`,
+        `이벤트 ${total.eventCount}건`,
+      ].join(" / "),
+      tone: total.hiddenAdjustmentTotal < 0 ? "warning" : "positive",
+    };
+  }
+
   private getTeacherStatusPrimaryValue(
     mode: Exclude<TeacherFocusMode, "overview">,
     sourceState: TeacherAggregateState | null,
@@ -1463,8 +3277,17 @@ class ClassPageView extends ItemView {
       return sourceState?.status === "invalid" ? "형식 확인" : "확인 필요";
     }
 
+    const classroomLabel = getAggregateDisplayClassroom(sourceState.data);
+    if (classroomLabel) {
+      return classroomLabel;
+    }
+
+    if (mode === "lesson" && sourceState.data.type === "lesson-summary" && sourceState.data.subject) {
+      return sourceState.data.subject;
+    }
+
     if (mode === "star" || sourceState.data.type === "star-ledger") {
-      return "기본 연결";
+      return "읽기 전용";
     }
 
     return `${sourceState.data.responseCount}건`;
@@ -1475,18 +3298,45 @@ class ClassPageView extends ItemView {
     sourceState: TeacherAggregateState | null,
   ): string {
     if (!sourceState || sourceState.status !== "loaded" || !sourceState.data) {
-      return sourceState?.message || "집계 파일 상태를 확인하세요.";
+      return sourceState?.message || "집계 파일 상태를 확인해 주세요.";
+    }
+
+    if (mode === "class" && sourceState.data.type === "class-summary") {
+      return [
+        `응답 ${sourceState.data.responseCount}건`,
+        sourceState.data.periodLabel,
+      ].filter(Boolean).join(" · ");
+    }
+
+    if (mode === "lesson" && sourceState.data.type === "lesson-summary") {
+      const explorer = this.getLessonExplorerState(sourceState.data);
+      if (!explorer.selectedGroup) {
+        return [
+          explorer.selectedSubject.subject || "수업",
+          "조건에 맞는 수업 그룹 없음",
+        ].filter(Boolean).join(" · ");
+      }
+
+      const selectedSummary = explorer.selectedGroup;
+      return [
+        selectedSummary.label,
+        `응답 ${selectedSummary.responseCount}건`,
+        selectedSummary.supportStudents.length > 0
+          ? `보충 지도 ${selectedSummary.supportStudents.length}명`
+          : "",
+      ].filter(Boolean).join(" · ");
     }
 
     if (mode === "star" && sourceState.data.type === "star-ledger") {
       const enabledRules = getEnabledStarRules(sourceState.data.rules);
       return [
+        sourceState.data.periodLabel,
         `규칙 ${enabledRules.length}개`,
         `학생 ${sourceState.data.totals.length}명`,
       ].join(" · ");
     }
 
-    return sourceState.data.periodLabel || "범위 미확인";
+    return sourceState.data.periodLabel || "범위 정보 없음";
   }
 
   private getTeacherStatusHint(
@@ -1498,7 +3348,7 @@ class ClassPageView extends ItemView {
       : "누르면 이 영역만 보기";
 
     if (!sourceState || sourceState.status !== "loaded" || !sourceState.data) {
-      return `${actionHint} · 연결과 JSON 경로를 확인하세요.`;
+      return `${actionHint} · 처음 연결 중이라면 정상입니다. 집계 파일 생성과 경로를 확인해 주세요.`;
     }
 
     const suffix = sourceState.data.type === "star-ledger"
@@ -1506,10 +3356,10 @@ class ClassPageView extends ItemView {
           sourceState.data.eventCount > 0
             ? `이벤트 ${sourceState.data.eventCount}건`
             : "이벤트 없음",
-          `집계 ${formatDateLabel(sourceState.data.generatedAt, "시각 미확인")}`,
+          `집계 ${formatDateLabel(sourceState.data.generatedAt, "시각 정보 없음")}`,
         ].join(" · ")
       : [
-          `집계 ${formatDateLabel(sourceState.data.generatedAt, "시각 미확인")}`,
+          `집계 ${formatDateLabel(sourceState.data.generatedAt, "시각 정보 없음")}`,
           sourceState.data.excludedResponseCount > 0
             ? `제외 ${sourceState.data.excludedResponseCount}건`
             : "",
@@ -1519,14 +3369,14 @@ class ClassPageView extends ItemView {
       case "class":
         return `${actionHint} · 정서와 목표 상태 확인 · ${suffix}`;
       case "lesson":
-        return `${actionHint} · 수업 이해와 과제 상태 확인 · ${suffix}`;
+        return `${actionHint} · 보충 지도와 복습/수행 상태를 먼저 확인 · ${suffix}`;
       case "star":
-        return `${actionHint} · 읽기 전용 별점 요약 확인 · ${suffix}`;
+        return `${actionHint} · 공개 점수와 숨김 조정 상태를 읽기 전용으로 확인 · ${suffix}`;
     }
   }
 
   private getTeacherSourceDescription(): string {
-    return "문제가 생기면 이 섹션에서 JSON 경로, 집계 시각, 원본 시트 이름을 확인합니다.";
+    return "문제가 생기면 이 섹션에서 집계 파일 경로, 집계 시각, 원본 시트 이름을 확인합니다.";
   }
 
   private shouldShowTeacherSection(
@@ -1539,13 +3389,18 @@ class ClassPageView extends ItemView {
     sourceState: AggregateSourceState<ClassSummaryAggregate> | null,
   ): string {
     if (!sourceState || sourceState.status !== "loaded" || !sourceState.data) {
-      return "정서 상태, 목표 달성, 도움 필요 학생, 칭찬 후보를 학급용 집계 JSON에서 읽습니다.";
+      return "학급 집계가 연결되면 정서 상태, 목표 달성, 도움 필요 학생, 칭찬 후보를 여기서 확인합니다.";
     }
 
     return [
-      sourceState.data.classroom,
       sourceState.data.periodLabel,
-      `${sourceState.data.responseCount}건 반영`,
+      `응답 ${sourceState.data.responseCount}건`,
+      sourceState.data.supportStudents.length > 0
+        ? `주의 ${sourceState.data.supportStudents.length}명`
+        : "주의 학생 없음",
+      sourceState.data.praiseCandidates.length > 0
+        ? `칭찬 후보 ${sourceState.data.praiseCandidates.length}명`
+        : "",
       sourceState.data.excludedResponseCount > 0
         ? `제외 ${sourceState.data.excludedResponseCount}건`
         : "",
@@ -1556,16 +3411,39 @@ class ClassPageView extends ItemView {
     sourceState: AggregateSourceState<LessonSummaryAggregate> | null,
   ): string {
     if (!sourceState || sourceState.status !== "loaded" || !sourceState.data) {
-      return "어려워한 부분, 정오답, 복습/수행 상태를 수업용 집계 JSON에서 읽습니다.";
+      return "수업 집계가 연결되면 재설명 필요한 개념, 정오답, 복습/수행 상태를 여기서 확인합니다.";
     }
 
+    const explorer = this.getLessonExplorerState(sourceState.data);
+    const { selectedSubject, selectedGroup } = explorer;
+    if (!selectedGroup) {
+      return [
+        selectedSubject.subject || sourceState.data.subject,
+        this.buildLessonScopeDescription(explorer, {
+          includeSubject: false,
+          includeSubjectCount: false,
+          includeCurrentGroup: false,
+        }),
+        "조건에 맞는 수업 그룹 없음",
+      ].filter(Boolean).join(" · ");
+    }
+
+    const followUpCount = this.getAggregateCountByLabel(selectedGroup.assignmentSummary, "부분 완료")
+      + this.getAggregateCountByLabel(selectedGroup.assignmentSummary, "미완료");
+
     return [
-      sourceState.data.classroom,
-      sourceState.data.subject,
-      sourceState.data.periodLabel,
-      `${sourceState.data.responseCount}건 반영`,
-      sourceState.data.excludedResponseCount > 0
-        ? `제외 ${sourceState.data.excludedResponseCount}건`
+      selectedGroup.label,
+      this.buildLessonScopeDescription(explorer, {
+        includeSubject: false,
+        includeCurrentGroup: false,
+      }),
+      `응답 ${selectedGroup.responseCount}건`,
+      selectedGroup.supportStudents.length > 0
+        ? `보충 지도 ${selectedGroup.supportStudents.length}명`
+        : "보충 지도 대상 없음",
+      followUpCount > 0 ? `후속 확인 ${followUpCount}명` : "",
+      selectedGroup.excludedResponseCount > 0
+        ? `제외 ${selectedGroup.excludedResponseCount}건`
         : "",
     ].filter(Boolean).join(" · ");
   }
@@ -1574,16 +3452,23 @@ class ClassPageView extends ItemView {
     sourceState: AggregateSourceState<StarModeLedger> | null,
   ): string {
     if (!sourceState || sourceState.status !== "loaded" || !sourceState.data) {
-      return "별점 ledger의 읽기 전용 요약과 최근 이벤트를 확인합니다.";
+      return "별점 집계가 연결되면 읽기 전용 요약, 최근 이벤트, 공개/비공개 구분을 여기서 확인합니다.";
     }
 
     const enabledRules = getEnabledStarRules(sourceState.data.rules);
+    const teacherOnlyRules = enabledRules.filter((rule) => rule.visibility === "teacher");
+    const activeRuleSummaryCount = sourceState.data.ruleSummary
+      .filter((item) => item.eventCount > 0)
+      .length;
 
     return [
-      "기본 연결",
       sourceState.data.periodLabel,
       `규칙 ${enabledRules.length}개`,
+      activeRuleSummaryCount > 0 ? `발생 규칙 ${activeRuleSummaryCount}개` : "",
       `학생 ${sourceState.data.totals.length}명`,
+      teacherOnlyRules.length > 0
+        ? `선생님 확인 ${teacherOnlyRules.length}개`
+        : "",
       `자동 ${getAutomaticStarEventCount(sourceState.data.sourceSummary)}건`,
       sourceState.data.sourceSummary.manual > 0
         ? `수동/일괄 ${sourceState.data.sourceSummary.manual}건`
@@ -1592,7 +3477,7 @@ class ClassPageView extends ItemView {
   }
 
   private buildResponseCountDescription(
-    summary: Pick<ClassSummaryAggregate | LessonSummaryAggregate, "periodLabel" | "excludedResponseCount">,
+    summary: Pick<ClassSummaryAggregate | LessonSummaryAggregate | LessonGroupSummary, "periodLabel" | "excludedResponseCount">,
   ): string {
     if (summary.excludedResponseCount > 0) {
       return `${summary.periodLabel} / 제외 ${summary.excludedResponseCount}건`;
@@ -1607,18 +3492,21 @@ class ClassPageView extends ItemView {
   ): DetailRow {
     const rule = rules.find((item) => item.ruleId === event.ruleId);
     const sourceLabel = getStarEventSourceLabel(event);
-    const timeLabel = formatDateLabel(event.occurredAt, "시각 미확인");
+    const timeLabel = formatDateLabel(event.occurredAt, "시각 정보 없음");
 
     return {
-      title: `${rule?.label ?? "규칙 미확인"} · ${formatStudentLabel(event.student)}`,
-      meta: `${formatSignedPoints(event.delta)} · ${getStarVisibilityLabel(event.visibility)}`,
+      title: `${rule?.label ?? "규칙 정보 없음"} · ${formatStudentLabel(event.student)}`,
+      meta: [
+        formatSignedPoints(event.delta),
+        getStarVisibilityLabel(event.visibility),
+        sourceLabel,
+      ].join(" · "),
       description: [
         getStarCategoryLabel(event.category),
-        sourceLabel,
         timeLabel,
-        event.actor ? `교사 ${event.actor}` : "",
+        event.actor ? `선생님 ${event.actor}` : "",
         event.batchId ? `batch ${event.batchId}` : "",
-        event.note || rule?.description || "설명 미확인",
+        event.note || rule?.description || "설명 없음",
       ].filter(Boolean).join(" / "),
       tone: event.delta < 0 ? "warning" : "positive",
     };
@@ -1630,11 +3518,93 @@ class ClassPageView extends ItemView {
       meta: `총 ${formatSignedPoints(total.total)}`,
       description: [
         `학생 공개 ${formatSignedPoints(total.visibleTotal)}`,
-        `교사 조정 ${formatSignedPoints(total.hiddenAdjustmentTotal)}`,
+        `선생님 조정 ${formatSignedPoints(total.hiddenAdjustmentTotal)}`,
         `이벤트 ${total.eventCount}건`,
       ].join(" / "),
       tone: total.hiddenAdjustmentTotal < 0 ? "warning" : "positive",
     };
+  }
+
+  private getAggregateEmptyStateTitle(
+    sourceState: AggregateSourceState<
+      ClassSummaryAggregate | LessonSummaryAggregate | StarModeLedger
+    > | null,
+  ): string {
+    if (!sourceState) {
+      return "집계 연결을 확인해 주세요";
+    }
+
+    const label = this.getTeacherAggregateLabel(sourceState.kind);
+    switch (sourceState.status) {
+      case "missing":
+        return `${label}이 아직 연결되지 않았습니다`;
+      case "invalid":
+        return `${label} 형식을 다시 확인해 주세요`;
+      case "error":
+        return `${label}을 읽는 중 문제가 생겼습니다`;
+      default:
+        return `${label}을 표시할 수 없습니다`;
+    }
+  }
+
+  private getAggregateEmptyStateMessage(
+    emptyMessage: string,
+    sourceState: AggregateSourceState<
+      ClassSummaryAggregate | LessonSummaryAggregate | StarModeLedger
+    > | null,
+  ): string {
+    if (!sourceState) {
+      return emptyMessage;
+    }
+
+    if (sourceState.status === "invalid") {
+      return "파일은 찾았지만 classpage가 읽는 형식과 맞지 않습니다. 집계 파일을 다시 생성하거나 저장 내용을 다시 확인해 주세요.";
+    }
+
+    if (sourceState.status === "error") {
+      return "집계 파일을 읽는 동안 문제가 생겼습니다. 최근 동기화와 파일 내용을 다시 확인해 주세요.";
+    }
+
+    return emptyMessage;
+  }
+
+  private getAggregateEmptyStateTips(
+    sourceState: AggregateSourceState<
+      ClassSummaryAggregate | LessonSummaryAggregate | StarModeLedger
+    > | null,
+  ): string[] {
+    if (!sourceState) {
+      return [];
+    }
+
+    const generationTip = sourceState.kind === "class"
+      ? "학급 집계를 한 번 생성한 뒤 class-summary.json 경로를 확인해 주세요."
+      : sourceState.kind === "lesson"
+        ? "수업 집계를 한 번 생성한 뒤 lesson-summary.json 경로를 확인해 주세요."
+        : "별점 집계를 한 번 생성한 뒤 star-ledger.json 경로를 확인해 주세요.";
+
+    if (sourceState.status === "missing") {
+      return [
+        "처음 연결 중이라면 빈 화면이 정상입니다.",
+        generationTip,
+      ];
+    }
+
+    if (sourceState.status === "invalid") {
+      return [
+        "집계 파일 전체를 그대로 저장했는지 확인해 주세요.",
+        "예전 형식 파일이라면 최신 집계 결과로 다시 바꿔 주세요.",
+      ];
+    }
+
+    if (sourceState.status === "error") {
+      return [
+        "볼트 안 파일 경로와 동기화 상태를 다시 확인해 주세요.",
+        "파일을 다시 저장하거나 집계를 다시 생성하면 해결되는 경우가 많습니다.",
+      ];
+    }
+
+    return [];
   }
 
   private getSourceStatusLabel(
@@ -1644,7 +3614,7 @@ class ClassPageView extends ItemView {
       case "loaded":
         return "연결됨";
       case "missing":
-        return "없음";
+        return "연결 필요";
       case "invalid":
         return "형식 확인";
       default:
@@ -1668,7 +3638,7 @@ class ClassPageSettingTab extends PluginSettingTab {
     containerEl.empty();
     containerEl.createEl("h2", { text: "classpage 설정" });
     containerEl.createEl("p", {
-      text: "학생용 화면은 정적 문구와 Google Form 링크를, 교사용 화면은 집계 JSON 경로를 읽습니다. 학생 응답 원본이나 집계 로직 자체는 이 플러그인에서 수정하지 않습니다.",
+      text: "학생용 화면은 정적 문구와 Google Form 링크를, 선생님 화면은 집계 JSON 경로를 읽습니다. 학생 응답 원본이나 집계 로직 자체는 이 플러그인에서 수정하지 않습니다.",
     });
 
     new Setting(containerEl)
@@ -1795,13 +3765,13 @@ class ClassPageSettingTab extends PluginSettingTab {
     );
 
     this.addSettingsSection(
-      "교사용 페이지",
-      "교사용 화면은 원본 응답이 아니라 집계 결과를 읽습니다. 아래 값은 표시 레이어 설명과 집계 경로만 바꿉니다.",
+      "선생님 페이지",
+      "선생님 화면은 원본 응답이 아니라 집계 결과를 읽습니다. 아래 값은 표시 레이어 설명과 집계 경로만 바꿉니다.",
     );
 
     this.addTextSetting(
       "제목",
-      "교사용 페이지 상단 제목입니다.",
+      "선생님 페이지 상단 제목입니다.",
       settings.teacherPage.title,
       async (value) => {
         settings.teacherPage.title = value.trim() || DEFAULT_SETTINGS.teacherPage.title;
@@ -1811,7 +3781,7 @@ class ClassPageSettingTab extends PluginSettingTab {
 
     this.addTextSetting(
       "설명",
-      "교사용 페이지의 역할을 설명하는 문구입니다.",
+      "선생님 페이지의 역할을 설명하는 문구입니다.",
       settings.teacherPage.description,
       async (value) => {
         settings.teacherPage.description = value.trim();
@@ -1851,7 +3821,7 @@ class ClassPageSettingTab extends PluginSettingTab {
 
     this.addTextSetting(
       "별점 섹션 제목",
-      "교사용 별점모드 섹션 제목입니다.",
+      "선생님용 별점모드 섹션 제목입니다.",
       settings.teacherPage.starLedgerTitle,
       async (value) => {
         settings.teacherPage.starLedgerTitle = value.trim() || DEFAULT_SETTINGS.teacherPage.starLedgerTitle;
@@ -1890,7 +3860,7 @@ class ClassPageSettingTab extends PluginSettingTab {
 
     this.addTextSetting(
       "별점 JSON 경로",
-      "별점모드 ledger JSON 파일의 볼트 내부 경로입니다.",
+      "별점 집계 JSON 파일의 볼트 내부 경로입니다.",
       settings.teacherPage.sources.starLedgerPath,
       async (value) => {
         settings.teacherPage.sources.starLedgerPath =
@@ -2008,7 +3978,7 @@ class ClassPageSettingTab extends PluginSettingTab {
 
 function formatDateLabel(
   value: string,
-  fallback = "집계 시각 미확인",
+  fallback = "집계 시각 정보 없음",
 ): string {
   if (!value) {
     return fallback;
@@ -2026,10 +3996,41 @@ function formatDateLabel(
 }
 
 function formatStudentLabel(student: { classroom: string; number: string; name: string }): string {
-  const label = [student.classroom, student.number, student.name]
-    .filter(Boolean)
-    .join(" ");
-  return label || "학생 미확인";
+  const label = [
+    formatClassroomLabel(student.classroom),
+    formatStudentNumberLabel(student.number),
+    student.name.trim(),
+  ].filter(Boolean).join(" · ");
+  return label || "학생 정보 없음";
+}
+
+function formatClassroomLabel(classroom: string): string {
+  const trimmed = classroom.trim();
+  if (!trimmed) {
+    return "";
+  }
+
+  const normalized = trimmed.replace(/\s+/g, " ");
+  const dashMatch = normalized.match(/^(\d+)\s*[-/]\s*(\d+)$/);
+  if (dashMatch) {
+    return `${dashMatch[1]}학년 ${dashMatch[2]}반`;
+  }
+
+  const gradeClassMatch = normalized.match(/^(\d+)\s*학년\s*(\d+)\s*반$/);
+  if (gradeClassMatch) {
+    return `${gradeClassMatch[1]}학년 ${gradeClassMatch[2]}반`;
+  }
+
+  return normalized;
+}
+
+function formatStudentNumberLabel(number: string): string {
+  const trimmed = number.trim();
+  if (!trimmed) {
+    return "";
+  }
+
+  return trimmed.endsWith("번") ? trimmed : `${trimmed}번`;
 }
 
 function isPlaceholderDate(date: Date): boolean {
@@ -2057,7 +4058,7 @@ function getStarCategoryLabel(category: StarRuleSettings["category"]): string {
 }
 
 function getStarVisibilityLabel(visibility: StarRuleSettings["visibility"]): string {
-  return visibility === "teacher" ? "교사 전용" : "학생 공개";
+  return visibility === "teacher" ? "선생님 확인 전용" : "학생 공개";
 }
 
 function getStarSourceLabel(source: StarEvent["source"]): string {
@@ -2067,7 +4068,7 @@ function getStarSourceLabel(source: StarEvent["source"]): string {
     case "lesson-form":
       return "수업용 폼";
     case "manual":
-      return "수동/일괄 조정";
+      return "수동 조정/일괄 부여";
     default:
       return "시스템";
   }
@@ -2097,7 +4098,7 @@ function getStarRuleSourceSummary(sources: StarRuleSettings["sources"]): string 
     .filter((label, index, array) => array.indexOf(label) === index);
 
   if (labels.length === 0) {
-    return "입력 경로 미확인";
+    return "입력 경로 없음";
   }
 
   return `입력 ${labels.join(", ")}`;
@@ -2126,6 +4127,58 @@ function getAutomaticStarEventCount(summary: StarModeLedger["sourceSummary"]): n
   return summary["class-form"] + summary["lesson-form"] + summary.system;
 }
 
+function getAggregateDisplayClassroom(
+  data: ClassSummaryAggregate | LessonSummaryAggregate | LessonSubjectSummary | LessonGroupSummary | StarModeLedger,
+): string {
+  if ("type" in data && data.type === "star-ledger") {
+    return formatClassroomLabel(getStarLedgerClassroom(data));
+  }
+
+  return formatClassroomLabel(data.classroom);
+}
+
+function getStarLedgerClassroom(ledger: StarModeLedger): string {
+  if (ledger.classroom?.trim()) {
+    return ledger.classroom.trim();
+  }
+
+  const classrooms = [
+    ...ledger.totals.map((total) => total.student.classroom.trim()),
+    ...ledger.recentEvents.map((event) => event.student.classroom.trim()),
+  ].filter(Boolean);
+
+  if (classrooms.length === 0) {
+    return "";
+  }
+
+  const uniqueClassrooms = classrooms
+    .filter((value, index, array) => array.indexOf(value) === index);
+
+  return uniqueClassrooms.length === 1 ? uniqueClassrooms[0] : "여러 학급";
+}
+
+function sortStarRulesForDisplay(rules: StarRuleSettings[]): StarRuleSettings[] {
+  return rules.slice().sort((left, right) => {
+    const manualDiff = Number(right.sources.includes("manual"))
+      - Number(left.sources.includes("manual"));
+    if (manualDiff !== 0) {
+      return manualDiff;
+    }
+
+    const visibilityDiff = Number(left.visibility === "teacher")
+      - Number(right.visibility === "teacher");
+    if (visibilityDiff !== 0) {
+      return visibilityDiff;
+    }
+
+    if (right.delta !== left.delta) {
+      return right.delta - left.delta;
+    }
+
+    return left.label.localeCompare(right.label, "ko-KR");
+  });
+}
+
 function sortStarTotals(totals: StarStudentTotal[]): StarStudentTotal[] {
   return totals.slice().sort((left, right) => {
     if (right.visibleTotal !== left.visibleTotal) {
@@ -2136,4 +4189,28 @@ function sortStarTotals(totals: StarStudentTotal[]): StarStudentTotal[] {
     }
     return right.eventCount - left.eventCount;
   });
+}
+
+function sortStarTotalsByHiddenAdjustment(totals: StarStudentTotal[]): StarStudentTotal[] {
+  return totals.slice().sort((left, right) => {
+    const hiddenDiff = Math.abs(right.hiddenAdjustmentTotal) - Math.abs(left.hiddenAdjustmentTotal);
+    if (hiddenDiff !== 0) {
+      return hiddenDiff;
+    }
+
+    if (right.total !== left.total) {
+      return right.total - left.total;
+    }
+
+    return right.eventCount - left.eventCount;
+  });
+}
+
+function normalizeLookupText(value: string): string {
+  return value.trim().toLowerCase().replace(/\s+/g, " ");
+}
+
+function parseLeadingNumber(value: string): number {
+  const match = value.match(/^\d+/);
+  return match ? Number(match[0]) : 0;
 }

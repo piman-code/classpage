@@ -2,7 +2,7 @@
 
 ## 1. 목표
 
-별점모드는 학급 운영에서 학생의 긍정적 행동을 빠르게 기록하고, 교사가 나중에 누적 결과를 확인할 수 있게 하는 가벼운 보상 시스템입니다.
+별점모드는 학급 운영에서 학생의 긍정적 행동을 빠르게 기록하고, 선생님이 나중에 누적 결과를 확인할 수 있게 하는 가벼운 보상 시스템입니다.
 
 이 MVP의 목적은 다음과 같습니다.
 
@@ -14,8 +14,8 @@
 ## 2. 운영 원칙
 
 1. 기본은 가점 중심
-2. 감점은 교사 전용 조정으로 숨김 처리
-3. 학생 공개 점수와 교사 내부 조정을 분리
+2. 감점은 선생님 전용 조정으로 숨김 처리
+3. 학생 공개 점수와 선생님 내부 조정을 분리
 4. 총점보다 이벤트 이력이 우선
 5. 자동 적립은 단순한 규칙부터 시작
 6. 경쟁보다 성장과 누적 기록을 우선
@@ -27,8 +27,9 @@
 - 별점 규칙 정의
 - 이벤트 로그 기반 데이터 구조
 - 학생별 누적 점수 계산
-- 학생 공개 적립 / 교사 전용 조정 구분
-- 교사용 화면에서 규칙과 최근 적립 내역 확인
+- 규칙별 발생 summary 집계
+- 학생 공개 적립 / 선생님 전용 조정 구분
+- 선생님 화면에서 규칙과 최근 적립 내역 확인
 - Apps Script에서 JSON 생성 가능하도록 계약 정의
 
 ### 제외
@@ -50,8 +51,8 @@
 | lesson-submit | 수업 제출 | participation | +1 | student | lesson-form | true | 수업용 폼 제출 완료 |
 | assignment-complete | 복습/수행 완료 | participation | +1 | student | lesson-form | true | 수업용 폼의 복습/수행 상태가 완료로 분류되면 자동 적립 |
 | no-incorrect | 오답 없음 | participation | +1 | student | lesson-form | true | 수업용 폼에서 복습/수행 상태가 완료이고 오답이 없으면 자동 적립 |
-| manual-praise | 수동 칭찬 | service | +2 | student | manual | true | 교사가 공개 가점을 수동으로 부여 |
-| teacher-adjustment | 교사 전용 조정 | adjustment | -2 | teacher | manual | true | 필요할 때만 교사 내부 조정 |
+| manual-praise | 수동 칭찬 | service | +2 | student | manual | true | 선생님이 공개 가점을 수동으로 부여 |
+| teacher-adjustment | 선생님 전용 조정 | adjustment | -2 | teacher | manual | true | 필요할 때만 선생님 내부 조정 |
 
 다음 단계에서 추가 후보:
 
@@ -143,7 +144,40 @@ interface StarStudentTotal {
 }
 ```
 
-### 5-4. StarModeLedger
+### 5-4. StarRuleEventSummary
+
+규칙별 발생 요약입니다.
+
+```ts
+interface StarRuleEventSummary {
+  ruleId: string;
+  label: string;
+  category: "attendance" | "participation" | "service" | "adjustment" | "custom";
+  visibility: "student" | "teacher";
+  eventCount: number;
+  manualCount: number;
+  automaticCount: number;
+  sourceSummary: {
+    manual: number;
+    "class-form": number;
+    "lesson-form": number;
+    system: number;
+  };
+}
+```
+
+- `ruleId`
+  규칙 정의와 연결되는 요약 키
+- `label`
+  classpage가 규칙 lookup 없이도 바로 보여줄 수 있는 표시용 라벨
+- `eventCount`
+  기간 안에서 이 규칙이 실제로 발생한 총 건수
+- `manualCount`, `automaticCount`
+  수동 조정과 자동 적립을 읽기 전용 화면에서 바로 구분하기 위한 단서
+- `sourceSummary`
+  어떤 입력 경로에서 이 규칙이 발생했는지 더 자세히 확인할 수 있는 요약
+
+### 5-5. StarModeLedger
 
 classpage가 읽는 별점 JSON 계약입니다.
 
@@ -152,6 +186,7 @@ interface StarModeLedger {
   type: "star-ledger";
   generatedAt: string;
   periodLabel: string;
+  classroom?: string;
   excludedResponseCount: number;
   eventCount: number;
   source: {
@@ -167,10 +202,14 @@ interface StarModeLedger {
     system: number;
   };
   rules: StarRuleSettings[];
+  ruleSummary: StarRuleEventSummary[];
   totals: StarStudentTotal[];
   recentEvents: StarEvent[];
 }
 ```
+
+- `ruleSummary`
+  Apps Script가 계산한 규칙별 총 발생 수입니다. classpage는 이 값을 우선 사용해 규칙별 발생 현황과 자동/수동 분리를 정확히 보여줍니다.
 
 ## 6. studentKey 규칙
 
@@ -205,14 +244,14 @@ interface StarModeLedger {
 
 ## 8. 수동 적립 규칙
 
-교사가 직접 넣는 이벤트는 아래를 추천합니다.
+선생님이 직접 넣는 이벤트는 아래를 추천합니다.
 
 - 청소 +5
 - 친구 도움 +3
 - 준비물 완비 +2
 - 수업 참여 +2
 
-교사 전용 조정:
+선생님 전용 조정:
 
 - 지각 -2
 - 정리 미흡 -2
@@ -253,7 +292,7 @@ interface StarModeLedger {
 - `상태`
 - `타임스탬프`
 - `batchId`
-- `교사`
+- `선생님`
 - `규칙 ID`
 - `점수`
 - `공개 범위`
@@ -262,7 +301,7 @@ interface StarModeLedger {
 
 운영 방식:
 
-- 교사는 일괄 부여 시트에서 여러 학생 행을 준비합니다.
+- 선생님은 일괄 부여 시트에서 여러 학생 행을 준비합니다.
 - `적용`을 체크하거나 `적용`으로 표시한 뒤 `refreshAllSummaries()` 또는 `applyPendingStarBatchGrants()`를 실행합니다.
 - Apps Script가 대기 행을 `별점 수동 조정` 시트의 이벤트 행으로 복사하고, 원본 행의 `상태`를 `적용 완료`로 바꿉니다.
 - ledger는 최종적으로 `별점 수동 조정` 이벤트만 읽으므로 감사와 재집계 기준이 한 곳에 남습니다.
@@ -281,36 +320,41 @@ interface StarModeLedger {
 학생에게 숨길 값:
 
 - 감점 내역
-- 교사 전용 조정 점수
+- 선생님 전용 조정 점수
 - 내부 메모
 
-### 교사용 화면
+### 선생님 화면
 
-교사가 봐야 할 값:
+선생님이 봐야 할 값:
 
 - 학생별 총점
 - 학생 공개 누적점수
 - 숨김 조정 합계
 - 최근 적립/조정 이벤트
 - 규칙별 발생 횟수
+- 학생 이름 기준 가벼운 필터와 숨김 조정 반영 학생 빠른 보기
 
 ## 10. classpage UI 권장 방향
 
-### 교사용 MVP 카드
+### 선생님 화면 MVP 카드
 
 - 상태: 기본 연결 / 데이터 없음
+- 대상 학급 표시
 - 활성 규칙 수
 - 학생 공개 규칙 수
-- 교사 전용 규칙 수
+- 선생님 전용 규칙 수
 - 수동 조정 반영 여부
+- 규칙별 발생 현황 카드
+- `allowCustomDelta`, `visibility`, `source` 확인
+- 플러그인에서 직접 쓰지 않는다는 운영 안내
 - 최근 이벤트 목록
 - 상위 학생 5명
+- 학생 이름 기준 가벼운 필터 / 숨김 조정 학생 빠른 보기
 
 ### 다음 단계 UI
 
-- 학생별 상세 보기
-- 규칙별 필터
-- 기간 필터
+- 학생별 전체 이벤트 drill-down
+- 규칙별/기간 필터 확장
 - 자동 적립 / 수동 적립 구분 탭
 
 ## 11. Apps Script 구현 방향
@@ -332,7 +376,7 @@ interface StarModeLedger {
 
 - 학급용 응답 시트
 - 수업용 응답 시트
-- 교사 수동 조정 시트
+- 선생님 수동 조정 시트
 
 일괄 부여가 필요하면 아래 순서를 추가합니다.
 
@@ -354,9 +398,9 @@ interface StarModeLedger {
 
 1. `star-ledger` 타입/계약 정리
 2. Apps Script에서 별점 이벤트 JSON 생성
-3. 교사용 페이지에서 누적 점수/최근 이벤트 표시
+3. 선생님 페이지에서 누적 점수/최근 이벤트 표시
 4. 학급용/수업용 자동 적립 연결
-5. 교사 수동 조정 시트 연결
+5. 선생님 수동 조정 시트 연결
 
 규칙 편집, 수동 부여, 일괄 부여를 어디에 두는 것이 맞는지는
-[docs/STAR_MODE_EXPANSION_PLAN.md](/Users/hangbokee/classpage/docs/STAR_MODE_EXPANSION_PLAN.md) 에서 이어서 정리합니다.
+[docs/STAR_MODE_EXPANSION_PLAN.md](./STAR_MODE_EXPANSION_PLAN.md) 에서 이어서 정리합니다.

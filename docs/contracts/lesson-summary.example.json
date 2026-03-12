@@ -1,6 +1,12 @@
 {
   "type": "lesson-summary",
   "generatedAt": "2026-03-10T15:55:00+09:00",
+  "lessonKey": "2026-03-10|p5|과학|전류와-전압",
+  "lessonDate": "2026-03-10",
+  "periodOrder": 5,
+  "subjectKey": "과학",
+  "unitKey": "전류와-전압",
+  "unitLabel": "전류와 전압",
   "periodLabel": "2026-03-10 5교시",
   "classroom": "3-2",
   "subject": "과학",
@@ -10,7 +16,7 @@
     "formName": "수업용 Google Form",
     "formUrl": "https://docs.google.com/forms/d/e/1FAIpQLSeeKvU6VCMpItqXMEPiGVHJ5RW27FFur6_LbmFcBSqpxg-ujw/viewform?usp=header",
     "sheetName": "수업용 응답",
-    "aggregatorNote": "Apps Script가 Google 로그인 이메일 기준으로 수업 응답을 정리해 수업 요약 JSON으로 변환"
+    "aggregatorNote": "Apps Script가 Google 로그인 이메일 기준으로 수업 응답을 정리해 수업 요약 JSON으로 변환 / 과목별 최근 5개 수업 그룹까지 유지 / classpage는 과목 안에서 단원·날짜·수업 그룹 순서로 탐색"
   },
   "overview": {
     "averageCorrectCount": 6.8,
@@ -47,7 +53,7 @@
       "incorrectCount": 5,
       "misconception": "전압과 전류를 혼동함",
       "assignmentStatus": "부분 완료",
-      "teacherNote": "교사용 내부 메모 예시"
+      "teacherNote": "선생님용 내부 메모 예시"
     }
   ],
   "studentResults": [
@@ -123,6 +129,486 @@
           "concept": "직렬 연결 계산",
           "understanding": "높음",
           "understandingLabel": "높음"
+        }
+      ]
+    }
+  ],
+  "subjectSummaries": [
+    {
+      "groupKey": "2026-03-10|5교시|과학|전류와 전압",
+      "lessonKey": "2026-03-10|p5|과학|전류와-전압",
+      "label": "과학 · 2026-03-10 5교시 · 전류와 전압",
+      "lessonDate": "2026-03-10",
+      "periodOrder": 5,
+      "subjectKey": "과학",
+      "unitKey": "전류와-전압",
+      "unitLabel": "전류와 전압",
+      "periodLabel": "2026-03-10 5교시",
+      "lessonUnit": "전류와 전압",
+      "classroom": "3-2",
+      "subject": "과학",
+      "responseCount": 24,
+      "excludedResponseCount": 1,
+      "overview": {
+        "averageCorrectCount": 6.8,
+        "averageIncorrectCount": 1.9,
+        "assignmentCompletionLabel": "대체로 완료"
+      },
+      "difficultConcepts": [
+        {
+          "concept": "전류와 전압의 차이",
+          "count": 8,
+          "averageUnderstanding": "이해도 낮음",
+          "note": "어려웠던 부분 응답이 많아 재설명 필요"
+        },
+        {
+          "concept": "직렬 연결 계산",
+          "count": 5,
+          "averageUnderstanding": "보통",
+          "note": "예제 추가 필요"
+        }
+      ],
+      "assignmentSummary": [
+        { "label": "완료", "count": 16, "note": "제출 확인됨" },
+        { "label": "부분 완료", "count": 5, "note": "추가 점검 필요" },
+        { "label": "미완료", "count": 3, "note": "개별 안내 필요" }
+      ],
+      "supportStudents": [
+        {
+          "student": {
+            "classroom": "3-2",
+            "number": "03",
+            "name": "학생C"
+          },
+          "correctCount": 3,
+          "incorrectCount": 5,
+          "misconception": "전압과 전류를 혼동함",
+          "assignmentStatus": "부분 완료",
+          "teacherNote": "선생님용 내부 메모 예시"
+        }
+      ],
+      "studentResults": [
+        {
+          "student": {
+            "classroom": "3-2",
+            "number": "03",
+            "name": "학생C"
+          },
+          "correctCount": 3,
+          "incorrectCount": 5,
+          "assignmentStatus": "부분 완료",
+          "followUp": "보충 설명 필요"
+        },
+        {
+          "student": {
+            "classroom": "3-2",
+            "number": "12",
+            "name": "학생B"
+          },
+          "correctCount": 8,
+          "incorrectCount": 1,
+          "assignmentStatus": "완료",
+          "followUp": "심화 가능"
+        }
+      ],
+      "studentResponses": [
+        {
+          "student": {
+            "classroom": "3-2",
+            "number": "03",
+            "name": "학생C"
+          },
+          "lessonUnit": "전류와 전압",
+          "correctCount": 3,
+          "incorrectCount": 5,
+          "assignmentStatus": "부분 완료",
+          "incorrectReason": "전압과 전류를 같은 뜻으로 적음",
+          "teacherMessage": "직렬 연결 계산이 아직 헷갈립니다.",
+          "misconception": "전압과 전류를 혼동함",
+          "followUp": "보충 설명 필요",
+          "teacherNote": "자동 분석 메모 예시",
+          "concepts": [
+            {
+              "concept": "전류와 전압의 차이",
+              "understanding": "낮음",
+              "understandingLabel": "낮음"
+            },
+            {
+              "concept": "직렬 연결 계산",
+              "understanding": "높음",
+              "understandingLabel": "높음"
+            }
+          ]
+        }
+      ],
+      "groups": [
+        {
+          "groupKey": "2026-03-10|5교시|과학|전류와 전압",
+          "lessonKey": "2026-03-10|p5|과학|전류와-전압",
+          "label": "과학 · 2026-03-10 5교시 · 전류와 전압",
+          "lessonDate": "2026-03-10",
+          "periodOrder": 5,
+          "subjectKey": "과학",
+          "unitKey": "전류와-전압",
+          "unitLabel": "전류와 전압",
+          "periodLabel": "2026-03-10 5교시",
+          "lessonUnit": "전류와 전압",
+          "classroom": "3-2",
+          "subject": "과학",
+          "responseCount": 24,
+          "excludedResponseCount": 1,
+          "overview": {
+            "averageCorrectCount": 6.8,
+            "averageIncorrectCount": 1.9,
+            "assignmentCompletionLabel": "대체로 완료"
+          },
+          "difficultConcepts": [
+            {
+              "concept": "전류와 전압의 차이",
+              "count": 8,
+              "averageUnderstanding": "이해도 낮음",
+              "note": "어려웠던 부분 응답이 많아 재설명 필요"
+            },
+            {
+              "concept": "직렬 연결 계산",
+              "count": 5,
+              "averageUnderstanding": "보통",
+              "note": "예제 추가 필요"
+            }
+          ],
+          "assignmentSummary": [
+            { "label": "완료", "count": 16, "note": "제출 확인됨" },
+            { "label": "부분 완료", "count": 5, "note": "추가 점검 필요" },
+            { "label": "미완료", "count": 3, "note": "개별 안내 필요" }
+          ],
+          "supportStudents": [
+            {
+              "student": {
+                "classroom": "3-2",
+                "number": "03",
+                "name": "학생C"
+              },
+              "correctCount": 3,
+              "incorrectCount": 5,
+              "misconception": "전압과 전류를 혼동함",
+              "assignmentStatus": "부분 완료",
+              "teacherNote": "선생님용 내부 메모 예시"
+            }
+          ],
+          "studentResults": [
+            {
+              "student": {
+                "classroom": "3-2",
+                "number": "03",
+                "name": "학생C"
+              },
+              "correctCount": 3,
+              "incorrectCount": 5,
+              "assignmentStatus": "부분 완료",
+              "followUp": "보충 설명 필요"
+            },
+            {
+              "student": {
+                "classroom": "3-2",
+                "number": "12",
+                "name": "학생B"
+              },
+              "correctCount": 8,
+              "incorrectCount": 1,
+              "assignmentStatus": "완료",
+              "followUp": "심화 가능"
+            }
+          ],
+          "studentResponses": [
+            {
+              "student": {
+                "classroom": "3-2",
+                "number": "03",
+                "name": "학생C"
+              },
+              "lessonUnit": "전류와 전압",
+              "correctCount": 3,
+              "incorrectCount": 5,
+              "assignmentStatus": "부분 완료",
+              "incorrectReason": "전압과 전류를 같은 뜻으로 적음",
+              "teacherMessage": "직렬 연결 계산이 아직 헷갈립니다.",
+              "misconception": "전압과 전류를 혼동함",
+              "followUp": "보충 설명 필요",
+              "teacherNote": "자동 분석 메모 예시",
+              "concepts": [
+                {
+                  "concept": "전류와 전압의 차이",
+                  "understanding": "낮음",
+                  "understandingLabel": "낮음"
+                },
+                {
+                  "concept": "직렬 연결 계산",
+                  "understanding": "높음",
+                  "understandingLabel": "높음"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "groupKey": "2026-03-03|5교시|과학|전기 회로의 기본",
+          "lessonKey": "2026-03-03|p5|과학|전기-회로의-기본",
+          "label": "과학 · 2026-03-03 5교시 · 전기 회로의 기본",
+          "lessonDate": "2026-03-03",
+          "periodOrder": 5,
+          "subjectKey": "과학",
+          "unitKey": "전기-회로의-기본",
+          "unitLabel": "전기 회로의 기본",
+          "periodLabel": "2026-03-03 5교시",
+          "lessonUnit": "전기 회로의 기본",
+          "classroom": "3-2",
+          "subject": "과학",
+          "responseCount": 22,
+          "excludedResponseCount": 0,
+          "overview": {
+            "averageCorrectCount": 6.1,
+            "averageIncorrectCount": 2.4,
+            "assignmentCompletionLabel": "부분 완료 학생이 보임"
+          },
+          "difficultConcepts": [
+            {
+              "concept": "직렬 회로와 병렬 회로 비교",
+              "count": 7,
+              "averageUnderstanding": "보통",
+              "note": "다음 차시 시작 전에 다시 짚어볼 부분"
+            }
+          ],
+          "assignmentSummary": [
+            { "label": "완료", "count": 13, "note": "제출 확인됨" },
+            { "label": "부분 완료", "count": 6, "note": "추가 점검 필요" },
+            { "label": "미완료", "count": 3, "note": "개별 안내 필요" }
+          ],
+          "supportStudents": [
+            {
+              "student": {
+                "classroom": "3-2",
+                "number": "05",
+                "name": "학생E"
+              },
+              "correctCount": 4,
+              "incorrectCount": 4,
+              "misconception": "직렬 회로와 병렬 회로를 같은 구조로 이해함",
+              "assignmentStatus": "부분 완료",
+              "teacherNote": "다음 차시 첫 확인 대상"
+            }
+          ],
+          "studentResults": [
+            {
+              "student": {
+                "classroom": "3-2",
+                "number": "05",
+                "name": "학생E"
+              },
+              "correctCount": 4,
+              "incorrectCount": 4,
+              "assignmentStatus": "부분 완료",
+              "followUp": "회로 그림 다시 확인"
+            }
+          ],
+          "studentResponses": [
+            {
+              "student": {
+                "classroom": "3-2",
+                "number": "05",
+                "name": "학생E"
+              },
+              "lessonUnit": "전기 회로의 기본",
+              "correctCount": 4,
+              "incorrectCount": 4,
+              "assignmentStatus": "부분 완료",
+              "incorrectReason": "회로 연결 방향을 반대로 이해함",
+              "teacherMessage": "회로 그림을 한 번 더 보고 싶어요.",
+              "misconception": "직렬 회로와 병렬 회로를 혼동함",
+              "followUp": "회로 그림 다시 확인",
+              "teacherNote": "보충 설명 후 재확인",
+              "concepts": [
+                {
+                  "concept": "직렬 회로와 병렬 회로 비교",
+                  "understanding": "보통",
+                  "understandingLabel": "보통"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "groupKey": "2026-03-10|3교시|국어|설득하는 글 읽기",
+      "lessonKey": "2026-03-10|p3|국어|설득하는-글-읽기",
+      "label": "국어 · 2026-03-10 3교시 · 설득하는 글 읽기",
+      "lessonDate": "2026-03-10",
+      "periodOrder": 3,
+      "subjectKey": "국어",
+      "unitKey": "설득하는-글-읽기",
+      "unitLabel": "설득하는 글 읽기",
+      "periodLabel": "2026-03-10 3교시",
+      "lessonUnit": "설득하는 글 읽기",
+      "classroom": "3-2",
+      "subject": "국어",
+      "responseCount": 23,
+      "excludedResponseCount": 0,
+      "overview": {
+        "averageCorrectCount": 7.4,
+        "averageIncorrectCount": 1.1,
+        "assignmentCompletionLabel": "대체로 완료"
+      },
+      "difficultConcepts": [
+        {
+          "concept": "주장과 근거 구분",
+          "count": 6,
+          "averageUnderstanding": "보통",
+          "note": "예문 비교가 더 필요함"
+        }
+      ],
+      "assignmentSummary": [
+        { "label": "완료", "count": 18, "note": "제출 확인됨" },
+        { "label": "부분 완료", "count": 4, "note": "추가 점검 필요" },
+        { "label": "미완료", "count": 1, "note": "개별 안내 필요" }
+      ],
+      "supportStudents": [
+        {
+          "student": {
+            "classroom": "3-2",
+            "number": "09",
+            "name": "학생D"
+          },
+          "correctCount": 4,
+          "incorrectCount": 3,
+          "misconception": "주장과 근거를 같은 문장으로 묶음",
+          "assignmentStatus": "부분 완료",
+          "teacherNote": "선생님이 짧게 다시 확인할 학생"
+        }
+      ],
+      "studentResults": [
+        {
+          "student": {
+            "classroom": "3-2",
+            "number": "09",
+            "name": "학생D"
+          },
+          "correctCount": 4,
+          "incorrectCount": 3,
+          "assignmentStatus": "부분 완료",
+          "followUp": "주장과 근거 다시 확인"
+        }
+      ],
+      "studentResponses": [
+        {
+          "student": {
+            "classroom": "3-2",
+            "number": "09",
+            "name": "학생D"
+          },
+          "lessonUnit": "설득하는 글 읽기",
+          "correctCount": 4,
+          "incorrectCount": 3,
+          "assignmentStatus": "부분 완료",
+          "incorrectReason": "핵심 근거를 빠뜨림",
+          "teacherMessage": "근거를 한 문장씩 나눠 다시 써 보세요.",
+          "misconception": "주장과 근거를 혼동함",
+          "followUp": "주장과 근거 다시 확인",
+          "teacherNote": "다음 차시에 먼저 확인",
+          "concepts": [
+            {
+              "concept": "주장과 근거 구분",
+              "understanding": "보통",
+              "understandingLabel": "보통"
+            }
+          ]
+        }
+      ],
+      "groups": [
+        {
+          "groupKey": "2026-03-10|3교시|국어|설득하는 글 읽기",
+          "lessonKey": "2026-03-10|p3|국어|설득하는-글-읽기",
+          "label": "국어 · 2026-03-10 3교시 · 설득하는 글 읽기",
+          "lessonDate": "2026-03-10",
+          "periodOrder": 3,
+          "subjectKey": "국어",
+          "unitKey": "설득하는-글-읽기",
+          "unitLabel": "설득하는 글 읽기",
+          "periodLabel": "2026-03-10 3교시",
+          "lessonUnit": "설득하는 글 읽기",
+          "classroom": "3-2",
+          "subject": "국어",
+          "responseCount": 23,
+          "excludedResponseCount": 0,
+          "overview": {
+            "averageCorrectCount": 7.4,
+            "averageIncorrectCount": 1.1,
+            "assignmentCompletionLabel": "대체로 완료"
+          },
+          "difficultConcepts": [
+            {
+              "concept": "주장과 근거 구분",
+              "count": 6,
+              "averageUnderstanding": "보통",
+              "note": "예문 비교가 더 필요함"
+            }
+          ],
+          "assignmentSummary": [
+            { "label": "완료", "count": 18, "note": "제출 확인됨" },
+            { "label": "부분 완료", "count": 4, "note": "추가 점검 필요" },
+            { "label": "미완료", "count": 1, "note": "개별 안내 필요" }
+          ],
+          "supportStudents": [
+            {
+              "student": {
+                "classroom": "3-2",
+                "number": "09",
+                "name": "학생D"
+              },
+              "correctCount": 4,
+              "incorrectCount": 3,
+              "misconception": "주장과 근거를 같은 문장으로 묶음",
+              "assignmentStatus": "부분 완료",
+              "teacherNote": "선생님이 짧게 다시 확인할 학생"
+            }
+          ],
+          "studentResults": [
+            {
+              "student": {
+                "classroom": "3-2",
+                "number": "09",
+                "name": "학생D"
+              },
+              "correctCount": 4,
+              "incorrectCount": 3,
+              "assignmentStatus": "부분 완료",
+              "followUp": "주장과 근거 다시 확인"
+            }
+          ],
+          "studentResponses": [
+            {
+              "student": {
+                "classroom": "3-2",
+                "number": "09",
+                "name": "학생D"
+              },
+              "lessonUnit": "설득하는 글 읽기",
+              "correctCount": 4,
+              "incorrectCount": 3,
+              "assignmentStatus": "부분 완료",
+              "incorrectReason": "핵심 근거를 빠뜨림",
+              "teacherMessage": "근거를 한 문장씩 나눠 다시 써 보세요.",
+              "misconception": "주장과 근거를 혼동함",
+              "followUp": "주장과 근거 다시 확인",
+              "teacherNote": "다음 차시에 먼저 확인",
+              "concepts": [
+                {
+                  "concept": "주장과 근거 구분",
+                  "understanding": "보통",
+                  "understandingLabel": "보통"
+                }
+              ]
+            }
+          ]
         }
       ]
     }

@@ -1,6 +1,6 @@
 # classpage 자동화 레이어
 
-처음부터 직접 설치하고 연결해야 한다면 [docs/START_HERE.md](/Users/hangbokee/classpage/docs/START_HERE.md)와 [docs/BEGINNER_SETUP.md](/Users/hangbokee/classpage/docs/BEGINNER_SETUP.md)를 먼저 보는 편이 좋습니다. 이 문서는 전체 구조와 규칙을 설명하는 개요 문서입니다.
+처음부터 직접 설치하고 연결해야 한다면 [docs/START_HERE.md](./START_HERE.md)와 [docs/BEGINNER_SETUP.md](./BEGINNER_SETUP.md)를 먼저 보는 편이 좋습니다. 이 문서는 전체 구조와 규칙을 설명하는 개요 문서입니다.
 
 ## 1. 전체 자동화 구조
 
@@ -25,9 +25,9 @@
 
 구현 파일은 아래입니다.
 
-- [automation/apps-script/Config.gs](/Users/hangbokee/classpage/automation/apps-script/Config.gs)
-- [automation/apps-script/Code.gs](/Users/hangbokee/classpage/automation/apps-script/Code.gs)
-- [automation/apps-script/appsscript.json](/Users/hangbokee/classpage/automation/apps-script/appsscript.json)
+- [automation/apps-script/Config.gs](../automation/apps-script/Config.gs)
+- [automation/apps-script/Code.gs](../automation/apps-script/Code.gs)
+- [automation/apps-script/appsscript.json](../automation/apps-script/appsscript.json)
 
 ## 2. 학급용 집계 규칙
 
@@ -73,7 +73,7 @@ allowlist를 켜면 해당 이메일만 추가 보완에 사용하고, 기본값
 - 기분 이유나 선생님께 할 말에 도움 요청성 키워드가 있으면 +1
 - 최근 도움 받은 친구 기록이 있으면 +1
 
-즉, 정서 주의 + 목표 미달 같은 조합이면 바로 교사용 목록에 올라갑니다.
+즉, 정서 주의 + 목표 미달 같은 조합이면 바로 선생님용 목록에 올라갑니다.
 
 ### 칭찬/격려 후보
 
@@ -87,7 +87,10 @@ allowlist를 켜면 해당 이메일만 추가 보완에 사용하고, 기본값
 
 수업용 집계도 마찬가지로 로그인 이메일 기준으로 먼저 묶고, 필요하면 allowlist로 표시용 값을 보완합니다.
 
-수업용 집계는 기본적으로 "가장 최근 수업 그룹(date + period + subject)의 학생별 마지막 응답"만 사용합니다.
+수업용 집계는 top-level에서는 "가장 최근 전체 수업 그룹(date + period + subject + lessonUnit)의 학생별 마지막 응답"을 대표값으로 두고,
+`subjectSummaries[].groups[]`에서는 과목별 여러 수업 그룹의 학생별 마지막 응답을 함께 유지합니다.
+과목별 group 수가 너무 커지지 않도록 `Config.gs.rules.lessonSummary.recentGroupLimitPerSubject`로 최근 N개만 남길 수 있습니다. 기본값은 `5`입니다.
+classpage는 이 구조를 읽어 과목 안에서 단원과 날짜로 먼저 좁힌 뒤, 마지막에 수업 그룹을 고르는 얇은 탐색 UX를 제공합니다.
 
 ### 어려워한 개념
 
@@ -132,7 +135,7 @@ allowlist를 켜면 해당 이메일만 추가 보완에 사용하고, 기본값
 
 ### 학생별 정오답 / 과제 현황
 
-최신 수업 그룹의 학생별 마지막 응답을 그대로 남깁니다.
+각 수업 그룹의 학생별 마지막 응답을 그대로 남기고, classpage는 선택된 과목과 그룹 기준으로 이 값을 읽습니다.
 
 - 정답 수
 - 오답 수
@@ -148,6 +151,39 @@ allowlist를 켜면 해당 이메일만 추가 보완에 사용하고, 기본값
 현재 단계에서는 `followUp: 심화 가능` 응답을 수업용 우수 수행 후보의 가장 가벼운 신호로 봅니다.  
 별도 상점 시스템이나 포인트 차감/사용 로직은 아직 넣지 않습니다.
 
+### 수업 group 구조화 필드
+
+수업 group에는 사람이 읽는 필드와 정렬/필터용 필드를 분리해 둡니다.
+
+- 사람용
+  `label`, `periodLabel`, `subject`, `unitLabel`
+- 정렬/필터용
+  `lessonDate`, `periodOrder`, `subjectKey`, `unitKey`, `lessonKey`
+
+권장 역할은 아래와 같습니다.
+
+- `label`
+  선생님이 드롭다운에서 바로 읽는 표시용 문구
+- `lessonDate`
+  날짜 정렬 기준
+- `periodOrder`
+  같은 날짜 안에서 차시 순서를 안정적으로 잡는 값
+- `unitKey`
+  단원/주제 기준 필터 확장용 키
+- `lessonKey`
+  날짜/교시/과목/단원을 묶은 기계용 식별값
+
+현재 classpage는 이 필드들을 아래처럼 사용합니다.
+
+- `unitKey`
+  선택된 과목 안에서 단원 필터 기준으로 사용
+- `lessonDate`
+  날짜 드롭다운 정렬과 날짜 필터 기준으로 사용
+- `periodOrder`
+  같은 날짜 안에서 수업 group 순서를 안정적으로 정렬
+- `lessonKey`
+  최종 fallback 식별값으로 사용
+
 ## 4. 별점모드 ledger 규칙
 
 별점모드는 총점 저장보다 이벤트 로그를 우선합니다.
@@ -157,7 +193,7 @@ allowlist를 켜면 해당 이메일만 추가 보완에 사용하고, 기본값
 - 수업용 폼 제출 시 `수업 제출 +1`
 - 수업용 폼에서 복습/수행 상태가 `완료`면 `복습/수행 완료 +1`
 - 수업용 폼에서 복습/수행 상태가 `완료`이고 오답이 `0`이면 `오답 없음 +1`
-- `별점 수동 조정` 시트에서 공개 가점과 교사 전용 조정을 함께 추가
+- `별점 수동 조정` 시트에서 공개 가점과 선생님 전용 조정을 함께 추가
 
 규칙의 source of truth는 `Config.gs.rules.starMode.rules` 입니다.
 
@@ -206,7 +242,7 @@ allowlist를 켜면 해당 이메일만 추가 보완에 사용하고, 기본값
 - `점수`
 - `공개 범위`
 - `메모`
-- `교사`
+- `선생님`
 - `batchId`
 
 동작 방식은 다음과 같습니다.
@@ -215,7 +251,7 @@ allowlist를 켜면 해당 이메일만 추가 보완에 사용하고, 기본값
 2. 없으면 이메일 기준 불투명 키를 만들고, 그것도 없으면 반/번호/이름 조합으로 식별합니다.
 3. `ruleId`로 규칙을 찾습니다.
 4. `allowCustomDelta: true`인 규칙만 시트의 `점수` 값으로 덮어씁니다.
-5. `교사`, `batchId`는 최근 이벤트와 운영 기록 확인용 메타데이터로 함께 ledger에 들어갑니다.
+5. `선생님`, `batchId`는 최근 이벤트와 운영 기록 확인용 메타데이터로 함께 ledger에 들어갑니다.
 
 자동 적립과 수동/일괄 조정은 모두 같은 `StarEvent` 구조로 합쳐지고,
 `star-ledger.json`에는 `sourceSummary`가 함께 들어가 입력원별 이벤트 수를 요약합니다.
@@ -240,7 +276,7 @@ allowlist를 켜면 해당 이메일만 추가 보완에 사용하고, 기본값
 - `상태`
 - `타임스탬프`
 - `batchId`
-- `교사`
+- `선생님`
 - `규칙 ID`
 - `점수`
 - `공개 범위`
@@ -249,7 +285,7 @@ allowlist를 켜면 해당 이메일만 추가 보완에 사용하고, 기본값
 
 동작 방식은 다음과 같습니다.
 
-1. 교사는 여러 학생 행을 준비하고 `적용` 값을 켭니다.
+1. 선생님은 여러 학생 행을 준비하고 `적용` 값을 켭니다.
 2. `applyPendingStarBatchGrants()` 또는 `refreshAllSummaries()`가 대기 행을 읽습니다.
 3. Apps Script가 이 행들을 `별점 수동 조정` 시트로 복사합니다.
 4. 원본 행의 `상태`는 `적용 완료`로 바뀌고, `batchId`가 비어 있으면 실행 시점 기준 값이 자동 생성됩니다.
@@ -296,13 +332,22 @@ allowlist를 따로 두는 이유는 다음과 같습니다.
 - `lesson-summary.json`
 - `star-ledger.json`
 
-이 세 파일은 기본적으로 교사용 내부 산출물로 보는 편이 안전합니다.
+이 세 파일은 기본적으로 선생님용 내부 산출물로 보는 편이 안전합니다.
 학생에게 공유할 때는 raw JSON이 아니라 공개 가능한 값만 따로 추린 노트나 출력물을 사용하는 것을 권장합니다.
 
-학급용/수업용 JSON에는 교사용 drill-down을 위해 학생별 최신 응답 스냅샷을 함께 넣을 수 있습니다.
-이 스냅샷은 원문 전체 저장이 아니라, 교사용 판단에 필요한 최신 응답 근거만 얇게 담는 것을 권장합니다.
+학급용/수업용 JSON에는 선생님용 drill-down을 위해 학생별 최신 응답 스냅샷을 함께 넣을 수 있습니다.
+이 스냅샷은 원문 전체 저장이 아니라, 선생님용 판단에 필요한 최신 응답 근거만 얇게 담는 것을 권장합니다.
 
-구체적으로는 `studentResponses`에 감정 상태, 목표, 학생 메시지, 교사용 자동 메모가 들어갈 수 있으므로, 공개용 데이터로 재사용하지 않는 편이 안전합니다.
+구체적으로는 `studentResponses`에 감정 상태, 목표, 학생 메시지, 선생님용 자동 메모가 들어갈 수 있으므로, 공개용 데이터로 재사용하지 않는 편이 안전합니다.
+
+`lesson-summary.json`은 현재 아래 두 층을 함께 가집니다.
+
+- top-level 최신 전체 수업 그룹 요약
+- `subjectSummaries[].groups[]`
+  과목별 여러 수업 그룹 요약과 학생 응답 스냅샷
+
+이때 `subjectSummaries[].groups[]`는 설정값에 따라 과목별 최근 N개만 유지할 수 있고,
+각 group 안에서는 `label`과 구조화 필드를 함께 내려 사람이 읽는 표시와 기계 정렬 기준을 분리합니다.
 
 세 JSON에는 공통적으로 아래 최소 정보가 추가됩니다.
 
@@ -313,7 +358,7 @@ allowlist를 따로 두는 이유는 다음과 같습니다.
 
 주의:
 
-- `star-ledger.json`에는 교사 전용 조정, 내부 note, studentKey 같은 내부 운영용 필드가 포함될 수 있습니다.
+- `star-ledger.json`에는 선생님 전용 조정, 내부 note, studentKey 같은 내부 운영용 필드가 포함될 수 있습니다.
 - 공개용 공유 자료는 이 raw 파일과 분리하는 편이 안전합니다.
 
 ### 생성 방식
@@ -335,11 +380,11 @@ Apps Script는 두 가지 방식으로 결과를 제공합니다.
 첫 단계는 `installRefreshTrigger()`로 15분 간격 시간 트리거를 거는 방식을 추천합니다.  
 폼 제출 즉시 트리거보다 덜 예민하고, 디버깅도 쉽습니다.
 
-Drive 자동 갱신 후 Mac에서 Obsidian 볼트로 자동 복사하는 운영 방식은 [docs/DRIVE_SYNC_SETUP.md](/Users/hangbokee/classpage/docs/DRIVE_SYNC_SETUP.md) 에 정리했습니다.
+Drive 자동 갱신 후 Mac에서 Obsidian 볼트로 자동 복사하는 운영 방식은 [docs/DRIVE_SYNC_SETUP.md](./DRIVE_SYNC_SETUP.md) 에 정리했습니다.
 
 ## 7. 운영자가 수정할 수 있는 규칙/설정 포인트
 
-운영자가 가장 자주 바꿀 곳은 [automation/apps-script/Config.gs](/Users/hangbokee/classpage/automation/apps-script/Config.gs) 입니다.
+운영자가 가장 자주 바꿀 곳은 [automation/apps-script/Config.gs](../automation/apps-script/Config.gs) 입니다.
 
 ### 시트 연결
 

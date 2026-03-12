@@ -1,9 +1,9 @@
 {
   "id": "classpage",
   "name": "classpage",
-  "version": "0.3.2",
+  "version": "0.4.0",
   "minAppVersion": "1.5.0",
-  "description": "A lightweight classroom page for student forms and teacher summaries.",
+  "description": "A read-first classroom dashboard for student forms and teacher summaries.",
   "author": "piman-code",
   "authorUrl": "https://github.com/piman-code",
   "isDesktopOnly": false
