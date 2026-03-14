@@ -29,6 +29,36 @@ export interface TeacherAggregateSourceSettings {
   starLedgerPath: string;
 }
 
+export interface TeacherStudentPhotoSettings {
+  mappingJsonPath: string;
+}
+
+export interface TeacherStudentRosterSettings {
+  rosterJsonPath: string;
+}
+
+export type TeacherDashboardPreset =
+  | "default"
+  | "risk-focus"
+  | "praise-focus"
+  | "submission-focus";
+
+export type TeacherDashboardStudentSort =
+  | "number"
+  | "risk"
+  | "praise"
+  | "recent";
+
+export interface TeacherDashboardPreferences {
+  preset: TeacherDashboardPreset;
+  defaultStudentSort: TeacherDashboardStudentSort;
+  highlightAtRiskStudents: boolean;
+  highlightPraiseCandidates: boolean;
+  highlightMissingSubmissions: boolean;
+  prioritizeMissingSubmissionsInOverview: boolean;
+  prioritizeLessonFollowUpInOverview: boolean;
+}
+
 export interface TeacherPageSettings {
   title: string;
   description: string;
@@ -40,6 +70,9 @@ export interface TeacherPageSettings {
   lessonSummaryEmptyMessage: string;
   starLedgerEmptyMessage: string;
   sources: TeacherAggregateSourceSettings;
+  roster: TeacherStudentRosterSettings;
+  dashboardPreferences: TeacherDashboardPreferences;
+  studentPhotos: TeacherStudentPhotoSettings;
 }
 
 export interface ClassPageSettings {
@@ -64,6 +97,19 @@ export interface StudentReference {
   classroom: string;
   number: string;
   name: string;
+}
+
+export interface StudentRosterEntry extends StudentReference {
+  studentId: string;
+  note: string;
+}
+
+export interface StudentRoster {
+  type: "student-roster";
+  generatedAt: string;
+  sourceLabel: string;
+  defaultClassroom: string;
+  students: StudentRosterEntry[];
 }
 
 export interface ClassSupportStudent {
@@ -306,8 +352,28 @@ export interface AggregateSourceState<T> {
   data: T | null;
 }
 
+export interface TeacherStudentPhotoMap {
+  entries: Record<string, string>;
+}
+
+export interface TeacherStudentPhotoSourceState {
+  path: string;
+  status: "disabled" | "loaded" | "missing" | "invalid" | "error";
+  message: string;
+  data: TeacherStudentPhotoMap | null;
+}
+
+export interface TeacherStudentRosterSourceState {
+  path: string;
+  status: "disabled" | "loaded" | "missing" | "invalid" | "error";
+  message: string;
+  data: StudentRoster | null;
+}
+
 export interface TeacherPageData {
   classSummary: AggregateSourceState<ClassSummaryAggregate>;
   lessonSummary: AggregateSourceState<LessonSummaryAggregate>;
   starLedger: AggregateSourceState<StarModeLedger>;
+  roster: TeacherStudentRosterSourceState;
+  studentPhotoMap: TeacherStudentPhotoSourceState;
 }

@@ -1,0 +1,33 @@
+{
+  "type": "student-roster",
+  "generatedAt": "2026-03-10T07:00:00+09:00",
+  "sourceLabel": "2026학년도 3학년 2반 명단",
+  "defaultClassroom": "3-2",
+  "students": [
+    {
+      "classroom": "3-2",
+      "number": "01",
+      "name": "학생A",
+      "studentId": "2026-3-2-01",
+      "note": "학급 대표"
+    },
+    {
+      "classroom": "3-2",
+      "number": "07",
+      "name": "학생B",
+      "studentId": "2026-3-2-07",
+      "note": "전학 후 첫 주"
+    },
+    {
+      "classroom": "3-2",
+      "number": "12",
+      "name": "학생C"
+    },
+    {
+      "classroom": "3-3",
+      "number": "05",
+      "name": "학생D",
+      "note": "겸반 수업 예시"
+    }
+  ]
+}

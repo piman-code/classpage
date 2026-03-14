@@ -11,6 +11,7 @@
 - 수업 화면에서 과목 -> 단원 -> 최근 수업 범위/특정 날짜 -> 수업 그룹 탐색
 - 수업 결과를 바탕으로 다음 피드백 대상 빠르게 확인
 - 별점 자동 적립 결과와 Google Sheets 기반 수동 조정 반영 상태 확인
+- CSV 파일 선택 또는 CSV/표 붙여넣기로 학생 명단 JSON 만들기
 - 별점 규칙 현황, 학생별 누적, 최근 변동 학생 흐름 읽기 전용 확인
 
 ## 이번 베타에서 아직 하지 않는 것
@@ -41,7 +42,7 @@
    이미 있는 것과 다음 단계, 나중 단계의 경계를 봅니다.
 5. [docs/templates/STUDENT_PUBLIC_SHARE_NOTE_TEMPLATE.md](docs/templates/STUDENT_PUBLIC_SHARE_NOTE_TEMPLATE.md)
    학생 공개용 안내문을 빠르게 복붙할 때 씁니다.
-6. [docs/releases/0.4.0.md](docs/releases/0.4.0.md)
+6. [docs/releases/0.4.1.md](docs/releases/0.4.1.md)
    이번 베타 릴리즈 노트 초안입니다.
 
 ## 문서 지도
@@ -64,7 +65,9 @@
   현재, 다음, 이후, 선택 기능을 구분한 제품 방향 문서입니다.
 - [docs/DRIVE_SYNC_SETUP.md](docs/DRIVE_SYNC_SETUP.md)
   Drive 자동 갱신 + Mac 자동 복사 운영을 붙일 때 봅니다.
-- [docs/releases/0.4.0.md](docs/releases/0.4.0.md)
+- [docs/TELEGRAM_BOT_AUTOMATION.md](docs/TELEGRAM_BOT_AUTOMATION.md)
+  개인 운영용으로 작업 결과를 텔레그램 행복이봇에 자동 전송하거나, `#codex보냄` inbound bridge를 붙이고 싶을 때 봅니다.
+- [docs/releases/0.4.1.md](docs/releases/0.4.1.md)
   GitHub Release에 바로 붙여넣을 수 있는 이번 베타 노트 초안입니다.
 
 ## 제품 설명
@@ -76,7 +79,7 @@
 - 학생 공개 안내
   공개 가능한 별점/칭찬 정보는 현재 학생용 페이지 자동 출력보다 공유 템플릿 중심으로 운영
 - 선생님 페이지
-  학급/수업 운영 대시보드, 대상 학급 표시, 과목/단원/최근 수업 범위/수업 그룹 선택형 수업 요약, 다음 피드백 대상 확인, 별점 읽기 전용 운영 요약, 집계 연결 상태
+  학급/수업 운영 대시보드, 대상 학급 표시, 과목/단원/최근 수업 범위/수업 그룹 선택형 수업 요약, 다음 피드백 대상 확인, 학생 명단 대비 미제출 학생 확인, 선생님 기준에 맞춘 프리셋/정렬/강조 설정, 별점 읽기 전용 운영 요약, 집계 연결 상태
 - 집계 레이어
   Google Form 응답을 Google Sheets에 저장한 뒤 Apps Script 또는 외부 자동화가 JSON 생성
 - 표시 레이어
@@ -95,6 +98,7 @@
 - `classpage-data/class-summary.json`
 - `classpage-data/lesson-summary.json`
 - `classpage-data/star-ledger.json`
+- `classpage-data/student-roster.json` (선택)
 
 현재 계약에서 선생님 화면이 특히 활용하는 읽기 전용 필드는 아래와 같습니다.
 
@@ -108,11 +112,30 @@
 - [docs/contracts/class-summary.example.json](docs/contracts/class-summary.example.json)
 - [docs/contracts/lesson-summary.example.json](docs/contracts/lesson-summary.example.json)
 - [docs/contracts/star-ledger.example.json](docs/contracts/star-ledger.example.json)
+- [docs/contracts/student-roster.example.json](docs/contracts/student-roster.example.json)
+- [docs/contracts/student-roster.example.csv](docs/contracts/student-roster.example.csv)
 
 주의:
 
 - 위 계약 예시는 선생님용 내부 JSON 예시입니다. 학생 공개용으로 raw 파일 자체를 공유하지 않는 편이 안전합니다.
 - 학생 공개가 필요하면 [docs/templates/STUDENT_PUBLIC_SHARE_NOTE_TEMPLATE.md](docs/templates/STUDENT_PUBLIC_SHARE_NOTE_TEMPLATE.md)처럼 공개용으로 한 번 더 걸러서 사용합니다.
+- `student-roster.json`은 제출 여부 비교용 기준표입니다. 명단을 연결하면 `studentResponses`에 아예 없는 학생도 선생님 화면에서 `미제출`로 표시할 수 있습니다.
+- 학생 명단은 두 가지 방식 중 편한 쪽으로 준비하면 됩니다. `student-roster.json`을 직접 연결해도 되고, `학생 명단 가져오기 도우미`에서 CSV를 저장해도 됩니다.
+- 선생님 화면은 `기본형 / 위험 조기 발견형 / 칭찬 강화형 / 미제출 집중형` 프리셋과 학생 정렬 기준을 바꿔, 각 교사의 시선 흐름에 맞게 조정할 수 있습니다.
+
+현재 바로 되는 것:
+
+- 학급/수업/별점 JSON 읽기
+- 학생 사진 매핑과 이니셜 아바타 fallback
+- 학생 명단 JSON 기반 미제출 학생 표시
+- CSV 기반 학생 명단 가져오기 도우미
+- 프리셋, 정렬, 강조 토글로 선생님 화면 보기 기준 조정
+
+아직 안 되는 것:
+
+- XLSX 파일 직접 불러오기
+- Google Sheets 직접 쓰기
+- AI 자동 피드백/추천
 
 ## 보안 및 운영 주의
 

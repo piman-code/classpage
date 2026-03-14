@@ -11,6 +11,7 @@
 3. 만들어진 JSON을 `classpage-data/` 아래에 넣고 경로를 연결합니다.
    확인: 선생님 페이지의 집계 연결 상태가 `연결됨`으로 바뀝니다.
 4. 선생님 페이지에서 학급 또는 수업 카드 하나라도 실제로 보이면 첫 연결은 성공입니다.
+5. 선생님 페이지 설정에서 보기 프리셋을 하나 골라, 내 기준에 맞는 우선순위로 바꿉니다.
 
 여기까지 되면 충분한 첫 성공입니다. 처음부터 학급/수업/별점 세 파일을 모두 완벽하게 붙일 필요는 없습니다.
 
@@ -21,12 +22,26 @@
 3. `validateAutomationSetup()`을 실행해 시트 연결이 `ok: true`인지 봅니다.
 4. `previewClassSummary()`, `previewLessonSummary()`, `previewStarLedger()`를 실행합니다.
 5. `classpage-data/class-summary.json`, `classpage-data/lesson-summary.json`, `classpage-data/star-ledger.json`을 볼트에 넣고 경로를 연결합니다.
+6. 미제출 학생까지 보고 싶다면 `Settings -> classpage -> 학생 명단 가져오기 도우미`에서 CSV를 불러오거나 붙여넣어 `student-roster.json`을 저장합니다. 저장하면 학생 명단 JSON 경로도 함께 맞춰집니다. 이미 JSON이 있다면 `학생 명단 JSON 경로`만 연결해도 됩니다.
 
 처음 연결할 때 기억하면 좋은 점:
 
 - 선생님 페이지가 처음엔 비어 보여도 정상입니다. 아직 집계 파일이 없다는 뜻일 수 있습니다.
 - 처음부터 세 파일을 완벽하게 다 붙일 필요는 없습니다. 학급 집계나 수업 집계 하나만 먼저 보여도 첫 성공으로 충분합니다.
 - 별점 수동 조정은 여전히 Google Sheets `별점 수동 조정` 시트에서 합니다.
+
+현재 버전에서 바로 되는 것:
+
+- 학급/수업/별점 집계 읽기
+- 학생 명단 JSON 연결 후 미제출 학생 확인
+- CSV 파일 선택 또는 표 붙여넣기로 학생 명단 JSON 저장
+- 학생 사진 매핑 또는 이니셜 아바타 fallback
+- 선생님 화면 프리셋/정렬/강조 설정
+
+아직 안 되는 것:
+
+- XLSX 파일 직접 불러오기
+- Google Sheets 직접 수정
 
 중요:
 

@@ -24,10 +24,19 @@ import type {
   StarRuleSettings,
   StarStudentTotal,
   StudentPageSettings,
+  StudentRoster,
+  StudentRosterEntry,
   StudentReference,
   StudentResult,
+  TeacherDashboardPreferences,
+  TeacherDashboardPreset,
+  TeacherDashboardStudentSort,
+  TeacherStudentPhotoMap,
+  TeacherStudentPhotoSettings,
+  TeacherStudentRosterSettings,
   TeacherPageSettings,
 } from "./types";
+import { normalizeStudentLookupKeyString } from "./student-identity";
 
 type LegacySettingsShape = Partial<{
   pageTitle: string;
@@ -45,6 +54,16 @@ const DEFAULT_CLASS_FORM_URL =
   "https://docs.google.com/forms/d/e/1FAIpQLSdBmPO3TZyp6jxjVgnXfSgypR0AzSC2yjSc9mRg7kjByPaLYA/viewform?usp=header";
 const DEFAULT_LESSON_FORM_URL =
   "https://docs.google.com/forms/d/e/1FAIpQLSeeKvU6VCMpItqXMEPiGVHJ5RW27FFur6_LbmFcBSqpxg-ujw/viewform?usp=header";
+
+export const DEFAULT_TEACHER_DASHBOARD_PREFERENCES: TeacherDashboardPreferences = {
+  preset: "default",
+  defaultStudentSort: "number",
+  highlightAtRiskStudents: true,
+  highlightPraiseCandidates: true,
+  highlightMissingSubmissions: true,
+  prioritizeMissingSubmissionsInOverview: false,
+  prioritizeLessonFollowUpInOverview: false,
+};
 
 const DEFAULT_STAR_RULES: StarRuleSettings[] = [
   {
@@ -196,6 +215,15 @@ export const DEFAULT_SETTINGS: ClassPageSettings = {
       lessonSummaryPath: "classpage-data/lesson-summary.json",
       starLedgerPath: "classpage-data/star-ledger.json",
     },
+    roster: {
+      rosterJsonPath: "",
+    },
+    dashboardPreferences: {
+      ...DEFAULT_TEACHER_DASHBOARD_PREFERENCES,
+    },
+    studentPhotos: {
+      mappingJsonPath: "",
+    },
   },
 };
 
@@ -345,11 +373,113 @@ function normalizeStudentPage(
   };
 }
 
+export function getTeacherDashboardPresetDefaults(
+  preset: TeacherDashboardPreset,
+): TeacherDashboardPreferences {
+  switch (preset) {
+    case "risk-focus":
+      return {
+        preset,
+        defaultStudentSort: "risk",
+        highlightAtRiskStudents: true,
+        highlightPraiseCandidates: false,
+        highlightMissingSubmissions: true,
+        prioritizeMissingSubmissionsInOverview: true,
+        prioritizeLessonFollowUpInOverview: true,
+      };
+    case "praise-focus":
+      return {
+        preset,
+        defaultStudentSort: "praise",
+        highlightAtRiskStudents: false,
+        highlightPraiseCandidates: true,
+        highlightMissingSubmissions: false,
+        prioritizeMissingSubmissionsInOverview: false,
+        prioritizeLessonFollowUpInOverview: false,
+      };
+    case "submission-focus":
+      return {
+        preset,
+        defaultStudentSort: "number",
+        highlightAtRiskStudents: true,
+        highlightPraiseCandidates: false,
+        highlightMissingSubmissions: true,
+        prioritizeMissingSubmissionsInOverview: true,
+        prioritizeLessonFollowUpInOverview: false,
+      };
+    default:
+      return {
+        ...DEFAULT_TEACHER_DASHBOARD_PREFERENCES,
+      };
+  }
+}
+
+function normalizeTeacherDashboardPreset(value: unknown): TeacherDashboardPreset {
+  switch (value) {
+    case "risk-focus":
+    case "praise-focus":
+    case "submission-focus":
+    case "default":
+      return value;
+    default:
+      return DEFAULT_TEACHER_DASHBOARD_PREFERENCES.preset;
+  }
+}
+
+function normalizeTeacherDashboardStudentSort(value: unknown): TeacherDashboardStudentSort {
+  switch (value) {
+    case "risk":
+    case "praise":
+    case "recent":
+    case "number":
+      return value;
+    default:
+      return DEFAULT_TEACHER_DASHBOARD_PREFERENCES.defaultStudentSort;
+  }
+}
+
+function normalizeTeacherDashboardPreferences(
+  value: Partial<TeacherDashboardPreferences>,
+  fallback: TeacherDashboardPreferences,
+): TeacherDashboardPreferences {
+  const preset = normalizeTeacherDashboardPreset(value.preset ?? fallback.preset);
+  const presetDefaults = getTeacherDashboardPresetDefaults(preset);
+
+  return {
+    preset,
+    defaultStudentSort: normalizeTeacherDashboardStudentSort(
+      value.defaultStudentSort ?? fallback.defaultStudentSort ?? presetDefaults.defaultStudentSort,
+    ),
+    highlightAtRiskStudents: typeof value.highlightAtRiskStudents === "boolean"
+      ? value.highlightAtRiskStudents
+      : fallback.highlightAtRiskStudents ?? presetDefaults.highlightAtRiskStudents,
+    highlightPraiseCandidates: typeof value.highlightPraiseCandidates === "boolean"
+      ? value.highlightPraiseCandidates
+      : fallback.highlightPraiseCandidates ?? presetDefaults.highlightPraiseCandidates,
+    highlightMissingSubmissions: typeof value.highlightMissingSubmissions === "boolean"
+      ? value.highlightMissingSubmissions
+      : fallback.highlightMissingSubmissions ?? presetDefaults.highlightMissingSubmissions,
+    prioritizeMissingSubmissionsInOverview:
+      typeof value.prioritizeMissingSubmissionsInOverview === "boolean"
+        ? value.prioritizeMissingSubmissionsInOverview
+        : fallback.prioritizeMissingSubmissionsInOverview
+          ?? presetDefaults.prioritizeMissingSubmissionsInOverview,
+    prioritizeLessonFollowUpInOverview:
+      typeof value.prioritizeLessonFollowUpInOverview === "boolean"
+        ? value.prioritizeLessonFollowUpInOverview
+        : fallback.prioritizeLessonFollowUpInOverview
+          ?? presetDefaults.prioritizeLessonFollowUpInOverview,
+  };
+}
+
 function normalizeTeacherPage(
   value: unknown,
   fallback: TeacherPageSettings,
 ): TeacherPageSettings {
   const teacherPage = (value ?? {}) as Partial<TeacherPageSettings>;
+  const roster = (teacherPage.roster ?? {}) as Partial<TeacherStudentRosterSettings>;
+  const dashboardPreferences = (teacherPage.dashboardPreferences ?? {}) as Partial<TeacherDashboardPreferences>;
+  const studentPhotos = (teacherPage.studentPhotos ?? {}) as Partial<TeacherStudentPhotoSettings>;
 
   return {
     title: normalizeString(teacherPage.title, fallback.title),
@@ -399,6 +529,16 @@ function normalizeTeacherPage(
         fallback.sources.starLedgerPath,
       ),
     },
+    roster: {
+      rosterJsonPath: normalizeOptionalString(roster.rosterJsonPath),
+    },
+    dashboardPreferences: normalizeTeacherDashboardPreferences(
+      dashboardPreferences,
+      fallback.dashboardPreferences,
+    ),
+    studentPhotos: {
+      mappingJsonPath: normalizeOptionalString(studentPhotos.mappingJsonPath),
+    },
   };
 }
 
@@ -423,6 +563,84 @@ export function normalizeSettings(value: unknown): ClassPageSettings {
       settings.teacherPage,
       DEFAULT_SETTINGS.teacherPage,
     ),
+  };
+}
+
+export function normalizeStudentPhotoMap(value: unknown): TeacherStudentPhotoMap {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return { entries: {} };
+  }
+
+  const entries = Object.entries(value as Record<string, unknown>).reduce<Record<string, string>>(
+    (result, [rawKey, rawPath]) => {
+      const key = normalizeStudentLookupKeyString(rawKey);
+      const path = typeof rawPath === "string" ? rawPath.trim() : "";
+      if (!key || !path) {
+        return result;
+      }
+
+      result[key] = path;
+      return result;
+    },
+    {},
+  );
+
+  return { entries };
+}
+
+function normalizeStudentRosterEntry(
+  value: unknown,
+  defaultClassroom: string,
+): StudentRosterEntry {
+  const entry = (value ?? {}) as Partial<StudentRosterEntry> & {
+    classNumber?: unknown;
+    studentNumber?: unknown;
+  };
+
+  return {
+    classroom: normalizeOptionalString(entry.classroom)
+      || normalizeOptionalString(entry.classNumber)
+      || defaultClassroom,
+    number: normalizeOptionalString(entry.number)
+      || normalizeOptionalString(entry.studentNumber),
+    name: normalizeOptionalString(entry.name),
+    studentId: normalizeOptionalString(entry.studentId),
+    note: normalizeOptionalString(entry.note),
+  };
+}
+
+export function normalizeStudentRoster(value: unknown): StudentRoster {
+  const roster = (value ?? {}) as Partial<StudentRoster> & {
+    updatedAt?: unknown;
+    label?: unknown;
+    items?: unknown;
+    classroom?: unknown;
+    classNumber?: unknown;
+  };
+  const defaultClassroom = normalizeOptionalString(roster.defaultClassroom)
+    || normalizeOptionalString(roster.classroom)
+    || normalizeOptionalString(roster.classNumber);
+  const rawStudents = Array.isArray(roster.students)
+    ? roster.students
+    : Array.isArray(roster.items)
+      ? roster.items
+      : [];
+
+  return {
+    type: "student-roster",
+    generatedAt: normalizeOptionalString(roster.generatedAt)
+      || normalizeOptionalString(roster.updatedAt),
+    sourceLabel: normalizeOptionalString(roster.sourceLabel)
+      || normalizeOptionalString(roster.label),
+    defaultClassroom,
+    students: rawStudents
+      .map((item) => normalizeStudentRosterEntry(item, defaultClassroom))
+      .filter((item) =>
+        item.classroom.length > 0
+        || item.number.length > 0
+        || item.name.length > 0
+        || item.studentId.length > 0
+      ),
   };
 }
 

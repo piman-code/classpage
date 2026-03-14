@@ -519,6 +519,11 @@
   background: rgba(202, 138, 4, 0.12);
 }
 
+.classpage-source-status--disabled {
+  color: var(--text-muted);
+  background: rgba(100, 116, 139, 0.12);
+}
+
 .classpage-source-card__path {
   margin: 0;
   font-family: var(--font-monospace);
@@ -612,6 +617,20 @@
   color: var(--text-muted);
 }
 
+.classpage-detail-list__title-group,
+.classpage-student-summary__content {
+  display: flex;
+  gap: 0.72rem;
+  align-items: flex-start;
+  min-width: 0;
+}
+
+.classpage-detail-list__title-wrap,
+.classpage-identity-text {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
 .classpage-accordion-list,
 .classpage-drilldown-list {
   display: grid;
@@ -694,6 +713,52 @@
   gap: 0.4rem;
 }
 
+.classpage-student-avatar {
+  position: relative;
+  width: 2.5rem;
+  height: 2.5rem;
+  flex: 0 0 auto;
+  overflow: hidden;
+  border-radius: 999px;
+  border: 1px solid rgba(53, 104, 173, 0.2);
+  background: linear-gradient(135deg, rgba(191, 219, 254, 0.95), rgba(219, 234, 254, 0.95));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.55);
+}
+
+.classpage-student-avatar--small {
+  width: 2.1rem;
+  height: 2.1rem;
+}
+
+.classpage-student-avatar__fallback {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.76rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  color: #1d3e63;
+}
+
+.classpage-student-avatar__image {
+  position: absolute;
+  inset: 0;
+  display: none;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.classpage-student-avatar.has-image .classpage-student-avatar__image {
+  display: block;
+}
+
+.classpage-student-avatar.has-image .classpage-student-avatar__fallback {
+  display: none;
+}
+
 .classpage-accordion > .classpage-drilldown-list,
 .classpage-accordion > .classpage-drilldown-empty,
 .classpage-student-drilldown > .classpage-drilldown-fields,
@@ -709,8 +774,39 @@
 
 .classpage-drilldown-fields {
   display: grid;
-  grid-template-columns: minmax(112px, auto) minmax(0, 1fr);
-  gap: 0.45rem 0.8rem;
+  gap: 0.6rem;
+}
+
+.classpage-drilldown-field {
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--background-secondary) 88%, var(--interactive-accent) 12%);
+  padding: 0.62rem 0.72rem;
+  display: grid;
+  gap: 0.25rem;
+}
+
+.classpage-drilldown-field__label {
+  font-size: 0.79rem;
+  font-weight: 700;
+  color: var(--text-muted);
+}
+
+.classpage-drilldown-field__value {
+  margin: 0;
+  line-height: 1.5;
+  color: var(--text-normal);
+}
+
+.classpage-detail-list__segments {
+  display: grid;
+  gap: 0.25rem;
+  margin-top: 0.1rem;
+}
+
+.classpage-detail-list__segment {
+  margin: 0;
+  line-height: 1.55;
 }
 
 .classpage-advanced {

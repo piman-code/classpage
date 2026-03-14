@@ -26,9 +26,97 @@ __export(main_exports, {
 module.exports = __toCommonJS(main_exports);
 var import_obsidian2 = require("obsidian");
 
+// src/student-identity.ts
+function hasStudentLookupIdentity(student) {
+  return [
+    student.classroom,
+    student.number,
+    student.name
+  ].some((value) => value.trim().length > 0);
+}
+function buildNormalizedStudentLookupKey(parts) {
+  const [classroom = "", number = "", ...rest] = parts;
+  const name = rest.join("|");
+  return [
+    normalizeStudentClassroomValue(classroom),
+    normalizeStudentNumberValue(number),
+    normalizeStudentNameValue(name)
+  ].join("|");
+}
+function normalizeStudentClassroomValue(value) {
+  const normalized = normalizeIdentityText(value);
+  if (!normalized) {
+    return "";
+  }
+  const noSpace = normalized.replace(/\s+/g, "");
+  const gradeClassMatch = noSpace.match(/^(\d+)학년(\d+)반$/) || noSpace.match(/^(\d+)[-/](\d+)$/);
+  if (gradeClassMatch) {
+    return `${stripLeadingZeroes(gradeClassMatch[1])}-${stripLeadingZeroes(gradeClassMatch[2])}`;
+  }
+  const spacedGradeClassMatch = normalized.match(/^(\d+)\s+(\d+)$/);
+  if (spacedGradeClassMatch) {
+    return `${stripLeadingZeroes(spacedGradeClassMatch[1])}-${stripLeadingZeroes(spacedGradeClassMatch[2])}`;
+  }
+  const classOnlyMatch = noSpace.match(/^(\d+)반$/) || noSpace.match(/^(\d+)$/);
+  if (classOnlyMatch) {
+    return `class-${stripLeadingZeroes(classOnlyMatch[1])}`;
+  }
+  return noSpace;
+}
+function normalizeStudentNumberValue(value) {
+  const normalized = normalizeIdentityText(value);
+  if (!normalized) {
+    return "";
+  }
+  const compact = normalized.replace(/\s+/g, "").replace(/번$/, "");
+  if (/^0*\d+$/.test(compact)) {
+    return stripLeadingZeroes(compact);
+  }
+  return compact;
+}
+function normalizeStudentNameValue(value) {
+  return normalizeIdentityText(value).replace(/\s+/g, "");
+}
+function getStudentLookupKey(student) {
+  if (!hasStudentLookupIdentity(student)) {
+    return null;
+  }
+  return buildNormalizedStudentLookupKey([
+    student.classroom,
+    student.number,
+    student.name
+  ]);
+}
+function getStudentNumberNameKey(student) {
+  const number = normalizeStudentNumberValue(student.number);
+  const name = normalizeStudentNameValue(student.name);
+  if (!number || !name) {
+    return null;
+  }
+  return [number, name].join("|");
+}
+function normalizeStudentLookupKeyString(value) {
+  return buildNormalizedStudentLookupKey(value.split("|"));
+}
+function normalizeIdentityText(value) {
+  return value.trim().toLowerCase().replace(/\s+/g, " ");
+}
+function stripLeadingZeroes(value) {
+  return String(Number(value));
+}
+
 // src/defaults.ts
 var DEFAULT_CLASS_FORM_URL = "https://docs.google.com/forms/d/e/1FAIpQLSdBmPO3TZyp6jxjVgnXfSgypR0AzSC2yjSc9mRg7kjByPaLYA/viewform?usp=header";
 var DEFAULT_LESSON_FORM_URL = "https://docs.google.com/forms/d/e/1FAIpQLSeeKvU6VCMpItqXMEPiGVHJ5RW27FFur6_LbmFcBSqpxg-ujw/viewform?usp=header";
+var DEFAULT_TEACHER_DASHBOARD_PREFERENCES = {
+  preset: "default",
+  defaultStudentSort: "number",
+  highlightAtRiskStudents: true,
+  highlightPraiseCandidates: true,
+  highlightMissingSubmissions: true,
+  prioritizeMissingSubmissionsInOverview: false,
+  prioritizeLessonFollowUpInOverview: false
+};
 var DEFAULT_STAR_RULES = [
   {
     ruleId: "arrival",
@@ -174,6 +262,15 @@ var DEFAULT_SETTINGS = {
       classSummaryPath: "classpage-data/class-summary.json",
       lessonSummaryPath: "classpage-data/lesson-summary.json",
       starLedgerPath: "classpage-data/star-ledger.json"
+    },
+    roster: {
+      rosterJsonPath: ""
+    },
+    dashboardPreferences: {
+      ...DEFAULT_TEACHER_DASHBOARD_PREFERENCES
+    },
+    studentPhotos: {
+      mappingJsonPath: ""
     }
   }
 };
@@ -280,8 +377,86 @@ function normalizeStudentPage(value, fallback) {
     }
   };
 }
+function getTeacherDashboardPresetDefaults(preset) {
+  switch (preset) {
+    case "risk-focus":
+      return {
+        preset,
+        defaultStudentSort: "risk",
+        highlightAtRiskStudents: true,
+        highlightPraiseCandidates: false,
+        highlightMissingSubmissions: true,
+        prioritizeMissingSubmissionsInOverview: true,
+        prioritizeLessonFollowUpInOverview: true
+      };
+    case "praise-focus":
+      return {
+        preset,
+        defaultStudentSort: "praise",
+        highlightAtRiskStudents: false,
+        highlightPraiseCandidates: true,
+        highlightMissingSubmissions: false,
+        prioritizeMissingSubmissionsInOverview: false,
+        prioritizeLessonFollowUpInOverview: false
+      };
+    case "submission-focus":
+      return {
+        preset,
+        defaultStudentSort: "number",
+        highlightAtRiskStudents: true,
+        highlightPraiseCandidates: false,
+        highlightMissingSubmissions: true,
+        prioritizeMissingSubmissionsInOverview: true,
+        prioritizeLessonFollowUpInOverview: false
+      };
+    default:
+      return {
+        ...DEFAULT_TEACHER_DASHBOARD_PREFERENCES
+      };
+  }
+}
+function normalizeTeacherDashboardPreset(value) {
+  switch (value) {
+    case "risk-focus":
+    case "praise-focus":
+    case "submission-focus":
+    case "default":
+      return value;
+    default:
+      return DEFAULT_TEACHER_DASHBOARD_PREFERENCES.preset;
+  }
+}
+function normalizeTeacherDashboardStudentSort(value) {
+  switch (value) {
+    case "risk":
+    case "praise":
+    case "recent":
+    case "number":
+      return value;
+    default:
+      return DEFAULT_TEACHER_DASHBOARD_PREFERENCES.defaultStudentSort;
+  }
+}
+function normalizeTeacherDashboardPreferences(value, fallback) {
+  const preset = normalizeTeacherDashboardPreset(value.preset ?? fallback.preset);
+  const presetDefaults = getTeacherDashboardPresetDefaults(preset);
+  return {
+    preset,
+    defaultStudentSort: normalizeTeacherDashboardStudentSort(
+      value.defaultStudentSort ?? fallback.defaultStudentSort ?? presetDefaults.defaultStudentSort
+    ),
+    highlightAtRiskStudents: typeof value.highlightAtRiskStudents === "boolean" ? value.highlightAtRiskStudents : fallback.highlightAtRiskStudents ?? presetDefaults.highlightAtRiskStudents,
+    highlightPraiseCandidates: typeof value.highlightPraiseCandidates === "boolean" ? value.highlightPraiseCandidates : fallback.highlightPraiseCandidates ?? presetDefaults.highlightPraiseCandidates,
+    highlightMissingSubmissions: typeof value.highlightMissingSubmissions === "boolean" ? value.highlightMissingSubmissions : fallback.highlightMissingSubmissions ?? presetDefaults.highlightMissingSubmissions,
+    prioritizeMissingSubmissionsInOverview: typeof value.prioritizeMissingSubmissionsInOverview === "boolean" ? value.prioritizeMissingSubmissionsInOverview : fallback.prioritizeMissingSubmissionsInOverview ?? presetDefaults.prioritizeMissingSubmissionsInOverview,
+    prioritizeLessonFollowUpInOverview: typeof value.prioritizeLessonFollowUpInOverview === "boolean" ? value.prioritizeLessonFollowUpInOverview : fallback.prioritizeLessonFollowUpInOverview ?? presetDefaults.prioritizeLessonFollowUpInOverview
+  };
+}
 function normalizeTeacherPage(value, fallback) {
   const teacherPage = value ?? {};
+  const roster = teacherPage.roster ?? {};
+  const dashboardPreferences = teacherPage.dashboardPreferences ?? {};
+  const studentPhotos = teacherPage.studentPhotos ?? {};
   return {
     title: normalizeString(teacherPage.title, fallback.title),
     description: normalizeOptionalStringWithFallback(
@@ -329,6 +504,16 @@ function normalizeTeacherPage(value, fallback) {
         teacherPage.sources?.starLedgerPath,
         fallback.sources.starLedgerPath
       )
+    },
+    roster: {
+      rosterJsonPath: normalizeOptionalString(roster.rosterJsonPath)
+    },
+    dashboardPreferences: normalizeTeacherDashboardPreferences(
+      dashboardPreferences,
+      fallback.dashboardPreferences
+    ),
+    studentPhotos: {
+      mappingJsonPath: normalizeOptionalString(studentPhotos.mappingJsonPath)
     }
   };
 }
@@ -350,6 +535,48 @@ function normalizeSettings(value) {
     teacherPage: normalizeTeacherPage(
       settings.teacherPage,
       DEFAULT_SETTINGS.teacherPage
+    )
+  };
+}
+function normalizeStudentPhotoMap(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return { entries: {} };
+  }
+  const entries = Object.entries(value).reduce(
+    (result, [rawKey, rawPath]) => {
+      const key = normalizeStudentLookupKeyString(rawKey);
+      const path = typeof rawPath === "string" ? rawPath.trim() : "";
+      if (!key || !path) {
+        return result;
+      }
+      result[key] = path;
+      return result;
+    },
+    {}
+  );
+  return { entries };
+}
+function normalizeStudentRosterEntry(value, defaultClassroom) {
+  const entry = value ?? {};
+  return {
+    classroom: normalizeOptionalString(entry.classroom) || normalizeOptionalString(entry.classNumber) || defaultClassroom,
+    number: normalizeOptionalString(entry.number) || normalizeOptionalString(entry.studentNumber),
+    name: normalizeOptionalString(entry.name),
+    studentId: normalizeOptionalString(entry.studentId),
+    note: normalizeOptionalString(entry.note)
+  };
+}
+function normalizeStudentRoster(value) {
+  const roster = value ?? {};
+  const defaultClassroom = normalizeOptionalString(roster.defaultClassroom) || normalizeOptionalString(roster.classroom) || normalizeOptionalString(roster.classNumber);
+  const rawStudents = Array.isArray(roster.students) ? roster.students : Array.isArray(roster.items) ? roster.items : [];
+  return {
+    type: "student-roster",
+    generatedAt: normalizeOptionalString(roster.generatedAt) || normalizeOptionalString(roster.updatedAt),
+    sourceLabel: normalizeOptionalString(roster.sourceLabel) || normalizeOptionalString(roster.label),
+    defaultClassroom,
+    students: rawStudents.map((item) => normalizeStudentRosterEntry(item, defaultClassroom)).filter(
+      (item) => item.classroom.length > 0 || item.number.length > 0 || item.name.length > 0 || item.studentId.length > 0
     )
   };
 }
@@ -866,10 +1093,330 @@ function buildLegacyLessonSubjectSummaries(subject, periodLabel, classroom, less
   ];
 }
 
+// src/roster-import.ts
+var COLUMN_ALIASES = {
+  classroom: [
+    "classroom",
+    "class",
+    "classnumber",
+    "\uBC18",
+    "\uD559\uAE09",
+    "\uBC18\uBA85"
+  ],
+  number: [
+    "number",
+    "no",
+    "studentnumber",
+    "studentno",
+    "\uBC88\uD638",
+    "\uCD9C\uC11D\uBC88\uD638"
+  ],
+  name: [
+    "name",
+    "studentname",
+    "\uC774\uB984",
+    "\uD559\uC0DD\uBA85",
+    "\uC131\uBA85"
+  ],
+  studentId: [
+    "studentid",
+    "id",
+    "\uD559\uBC88",
+    "\uD559\uC0DDid",
+    "\uD559\uC0DD\uBC88\uD638"
+  ],
+  note: [
+    "note",
+    "memo",
+    "remark",
+    "\uBE44\uACE0",
+    "\uBA54\uBAA8"
+  ]
+};
+function importStudentRosterFromDelimitedText(text, options = {}) {
+  const cleanedText = text.replace(/^\uFEFF/, "").trim();
+  const emptySummary = buildEmptySummary();
+  if (!cleanedText) {
+    return {
+      ok: false,
+      message: "\uBD99\uC5EC\uB123\uC740 CSV \uB0B4\uC6A9\uC774 \uBE44\uC5B4 \uC788\uC2B5\uB2C8\uB2E4. CSV \uD30C\uC77C \uB0B4\uC6A9\uC744 \uBD99\uC5EC\uB123\uAC70\uB098 \uD30C\uC77C\uC744 \uBA3C\uC800 \uBD88\uB7EC\uC640 \uC8FC\uC138\uC694.",
+      summary: emptySummary
+    };
+  }
+  const detectedDelimiter = detectDelimiter(cleanedText);
+  const rows = parseDelimitedText(cleanedText, getDelimiterCharacter(detectedDelimiter)).filter((row) => row.some((cell) => cell.trim().length > 0));
+  if (rows.length === 0) {
+    return {
+      ok: false,
+      message: "\uC77D\uC744 \uC218 \uC788\uB294 \uD589\uC774 \uC5C6\uC2B5\uB2C8\uB2E4. \uCCAB \uC904\uC5D0\uB294 \uD5E4\uB354\uAC00 \uC788\uC5B4\uC57C \uD558\uACE0, \uADF8 \uC544\uB798\uC5D0 \uD559\uC0DD \uD589\uC774 \uC788\uC5B4\uC57C \uD569\uB2C8\uB2E4.",
+      summary: {
+        ...emptySummary,
+        detectedDelimiter
+      }
+    };
+  }
+  const headerRow = rows[0].map((value) => value.trim());
+  const dataRows = rows.slice(1);
+  const normalizedHeaders = headerRow.map((value) => normalizeHeaderName(value));
+  const defaultClassroom = normalizeImportedClassroom(options.defaultClassroom ?? "");
+  const detectedColumns = resolveDetectedColumns(headerRow, normalizedHeaders);
+  const missingRequiredColumns = [
+    !detectedColumns.classroom && !defaultClassroom ? "\uBC18(classroom/class/\uBC18/\uD559\uAE09)" : "",
+    !detectedColumns.number ? "\uBC88\uD638(number/no/\uBC88\uD638)" : "",
+    !detectedColumns.name ? "\uC774\uB984(name/\uC774\uB984/\uD559\uC0DD\uBA85)" : ""
+  ].filter(Boolean);
+  const baseSummary = {
+    ...emptySummary,
+    detectedDelimiter,
+    totalDataRows: dataRows.length,
+    missingRequiredColumns,
+    detectedColumns
+  };
+  if (missingRequiredColumns.length > 0) {
+    return {
+      ok: false,
+      message: `\uD544\uC218 \uCEEC\uB7FC\uC744 \uCC3E\uC9C0 \uBABB\uD588\uC2B5\uB2C8\uB2E4: ${missingRequiredColumns.join(", ")}.`,
+      summary: {
+        ...baseSummary,
+        messages: [
+          `\uD544\uC218 \uCEEC\uB7FC\uC744 \uCC3E\uC9C0 \uBABB\uD588\uC2B5\uB2C8\uB2E4: ${missingRequiredColumns.join(", ")}.`,
+          "\uCCAB \uC904 \uD5E4\uB354\uB97C \uD655\uC778\uD574 \uC8FC\uC138\uC694. \uC608: classroom, number, name",
+          "\uC5D1\uC140\uC774\uB098 \uAD6C\uAE00 \uC2DC\uD2B8\uC5D0\uC11C \uBD99\uC5EC\uB123\uC5C8\uB2E4\uBA74 \uC81C\uBAA9 \uD589\uC774 \uCCAB \uC904\uC5D0 \uC788\uC5B4\uC57C \uD569\uB2C8\uB2E4.",
+          defaultClassroom ? `\uAE30\uBCF8 \uD559\uAE09 ${defaultClassroom} \uAE30\uC900\uC73C\uB85C \uC77D\uB3C4\uB85D \uC124\uC815\uD588\uC73C\uBBC0\uB85C \uBC18 \uCEEC\uB7FC\uC740 \uC5C6\uC5B4\uB3C4 \uB429\uB2C8\uB2E4.` : "\uBC18 \uCEEC\uB7FC\uC774 \uC5C6\uB2E4\uBA74 \uAE30\uBCF8 \uD559\uAE09\uC744 \uD568\uAED8 \uC785\uB825\uD574 \uC8FC\uC138\uC694."
+        ]
+      }
+    };
+  }
+  const students = [];
+  const seenKeys = /* @__PURE__ */ new Set();
+  const duplicateExamples = [];
+  let skippedEmptyRows = 0;
+  let skippedIncompleteRows = 0;
+  let duplicateCount = 0;
+  for (const row of dataRows) {
+    if (row.every((cell) => cell.trim().length === 0)) {
+      skippedEmptyRows += 1;
+      continue;
+    }
+    const classroom = normalizeImportedClassroom(
+      getCellValue(row, headerRow, detectedColumns.classroom) || defaultClassroom
+    );
+    const number = normalizeImportedNumber(
+      getCellValue(row, headerRow, detectedColumns.number)
+    );
+    const name = normalizeImportedName(
+      getCellValue(row, headerRow, detectedColumns.name)
+    );
+    const studentId = normalizeImportedText(
+      getCellValue(row, headerRow, detectedColumns.studentId)
+    );
+    const note = normalizeImportedText(
+      getCellValue(row, headerRow, detectedColumns.note)
+    );
+    if (!classroom || !number || !name) {
+      skippedIncompleteRows += 1;
+      continue;
+    }
+    const student = {
+      classroom,
+      number,
+      name,
+      studentId,
+      note
+    };
+    const key = getStudentLookupKey(student);
+    if (key && seenKeys.has(key)) {
+      duplicateCount += 1;
+      if (duplicateExamples.length < 3) {
+        duplicateExamples.push(formatImportedStudent(student));
+      }
+      continue;
+    }
+    if (key) {
+      seenKeys.add(key);
+    }
+    students.push(student);
+  }
+  if (students.length === 0) {
+    return {
+      ok: false,
+      message: "\uC77D\uC740 \uD559\uC0DD\uC774 \uC5C6\uC2B5\uB2C8\uB2E4. \uBC18, \uBC88\uD638, \uC774\uB984\uC774 \uBAA8\uB450 \uCC44\uC6CC\uC9C4 \uD589\uC774 \uC788\uB294\uC9C0 \uD655\uC778\uD574 \uC8FC\uC138\uC694.",
+      summary: {
+        ...baseSummary,
+        skippedEmptyRows,
+        skippedIncompleteRows,
+        duplicateCount,
+        duplicateExamples,
+        messages: [
+          "\uC77D\uC740 \uD559\uC0DD\uC774 \uC5C6\uC2B5\uB2C8\uB2E4.",
+          skippedIncompleteRows > 0 ? `\uBC18/\uBC88\uD638/\uC774\uB984\uC774 \uBE44\uC5B4 \uC788\uB294 \uD589 ${skippedIncompleteRows}\uAC1C\uB294 \uC81C\uC678\uB418\uC5C8\uC2B5\uB2C8\uB2E4.` : "\uBC18, \uBC88\uD638, \uC774\uB984\uC774 \uBAA8\uB450 \uB4E4\uC5B4 \uC788\uB294 \uD559\uC0DD \uD589\uC774 \uD544\uC694\uD569\uB2C8\uB2E4."
+        ]
+      }
+    };
+  }
+  const roster = {
+    type: "student-roster",
+    generatedAt: options.generatedAt ?? (/* @__PURE__ */ new Date()).toISOString(),
+    sourceLabel: normalizeImportedText(options.sourceLabel ?? "") || "classpage CSV \uAC00\uC838\uC624\uAE30",
+    defaultClassroom: defaultClassroom || getCommonClassroom(students),
+    students
+  };
+  const messages = [
+    `\uD559\uC0DD ${students.length}\uBA85\uC744 \uC77D\uC5C8\uC2B5\uB2C8\uB2E4.`,
+    skippedEmptyRows > 0 ? `\uBE48 \uD589 ${skippedEmptyRows}\uAC1C\uB294 \uC81C\uC678\uD588\uC2B5\uB2C8\uB2E4.` : "",
+    skippedIncompleteRows > 0 ? `\uBC18/\uBC88\uD638/\uC774\uB984\uC774 \uBE44\uC5B4 \uC788\uB294 \uD589 ${skippedIncompleteRows}\uAC1C\uB294 \uC81C\uC678\uD588\uC2B5\uB2C8\uB2E4.` : "",
+    duplicateCount > 0 ? `\uC911\uBCF5 \uAC00\uB2A5\uC131\uC774 \uC788\uB294 \uD559\uC0DD ${duplicateCount}\uBA85\uC740 \uD55C \uBC88\uB9CC \uB0A8\uACBC\uC2B5\uB2C8\uB2E4.` : "",
+    duplicateExamples.length > 0 ? `\uC911\uBCF5 \uC608\uC2DC: ${duplicateExamples.join(", ")}` : "",
+    !detectedColumns.classroom && defaultClassroom ? `\uBC18 \uCEEC\uB7FC\uC774 \uC5C6\uC5B4 \uAE30\uBCF8 \uD559\uAE09 ${defaultClassroom} \uAE30\uC900\uC73C\uB85C \uC77D\uC5C8\uC2B5\uB2C8\uB2E4.` : ""
+  ].filter(Boolean);
+  return {
+    ok: true,
+    roster,
+    summary: {
+      ...baseSummary,
+      importedCount: students.length,
+      skippedEmptyRows,
+      skippedIncompleteRows,
+      duplicateCount,
+      duplicateExamples,
+      previewStudents: students.slice(0, 5),
+      messages
+    }
+  };
+}
+function buildEmptySummary() {
+  return {
+    detectedDelimiter: "comma",
+    totalDataRows: 0,
+    importedCount: 0,
+    skippedEmptyRows: 0,
+    skippedIncompleteRows: 0,
+    duplicateCount: 0,
+    missingRequiredColumns: [],
+    detectedColumns: {},
+    duplicateExamples: [],
+    previewStudents: [],
+    messages: []
+  };
+}
+function detectDelimiter(text) {
+  const firstLine = text.split(/\r?\n/).find((line) => line.trim().length > 0) ?? "";
+  const tabCount = (firstLine.match(/\t/g) ?? []).length;
+  const semicolonCount = (firstLine.match(/;/g) ?? []).length;
+  const commaCount = (firstLine.match(/,/g) ?? []).length;
+  if (tabCount >= commaCount && tabCount >= semicolonCount && tabCount > 0) {
+    return "tab";
+  }
+  if (semicolonCount > commaCount && semicolonCount > 0) {
+    return "semicolon";
+  }
+  return "comma";
+}
+function getDelimiterCharacter(delimiter) {
+  switch (delimiter) {
+    case "tab":
+      return "	";
+    case "semicolon":
+      return ";";
+    default:
+      return ",";
+  }
+}
+function parseDelimitedText(text, delimiter) {
+  const rows = [];
+  let currentRow = [];
+  let currentCell = "";
+  let inQuotes = false;
+  for (let index = 0; index < text.length; index += 1) {
+    const char = text[index];
+    const nextChar = text[index + 1];
+    if (char === '"') {
+      if (inQuotes && nextChar === '"') {
+        currentCell += '"';
+        index += 1;
+      } else {
+        inQuotes = !inQuotes;
+      }
+      continue;
+    }
+    if (!inQuotes && char === delimiter) {
+      currentRow.push(currentCell);
+      currentCell = "";
+      continue;
+    }
+    if (!inQuotes && (char === "\n" || char === "\r")) {
+      if (char === "\r" && nextChar === "\n") {
+        index += 1;
+      }
+      currentRow.push(currentCell);
+      rows.push(currentRow);
+      currentRow = [];
+      currentCell = "";
+      continue;
+    }
+    currentCell += char;
+  }
+  currentRow.push(currentCell);
+  rows.push(currentRow);
+  return rows;
+}
+function resolveDetectedColumns(originalHeaders, normalizedHeaders) {
+  const result = {};
+  for (const [columnKey, aliases] of Object.entries(COLUMN_ALIASES)) {
+    const matchIndex = normalizedHeaders.findIndex((header) => aliases.includes(header));
+    if (matchIndex !== -1) {
+      result[columnKey] = originalHeaders[matchIndex];
+    }
+  }
+  return result;
+}
+function normalizeHeaderName(value) {
+  return value.trim().toLowerCase().replace(/\s+/g, "").replace(/[_-]+/g, "");
+}
+function getCellValue(row, headers, targetHeader) {
+  if (!targetHeader) {
+    return "";
+  }
+  const index = headers.indexOf(targetHeader);
+  return index >= 0 ? row[index] ?? "" : "";
+}
+function normalizeImportedText(value) {
+  return value.trim();
+}
+function normalizeImportedClassroom(value) {
+  const trimmed = value.trim().replace(/\s+/g, " ");
+  if (!trimmed) {
+    return "";
+  }
+  const compact = trimmed.replace(/\s+/g, "");
+  const gradeClassMatch = compact.match(/^(\d+)학년(\d+)반$/) || compact.match(/^(\d+)[-/](\d+)$/) || compact.match(/^(\d+)\.(\d+)$/);
+  if (gradeClassMatch) {
+    return `${Number(gradeClassMatch[1])}-${Number(gradeClassMatch[2])}`;
+  }
+  const classOnlyMatch = compact.match(/^(\d+)반$/) || compact.match(/^(\d+)$/);
+  if (classOnlyMatch) {
+    return `${Number(classOnlyMatch[1])}\uBC18`;
+  }
+  return trimmed;
+}
+function normalizeImportedNumber(value) {
+  return normalizeStudentNumberValue(value);
+}
+function normalizeImportedName(value) {
+  return value.trim().replace(/\s+/g, " ");
+}
+function getCommonClassroom(students) {
+  const classrooms = students.map((student) => student.classroom).filter((value, index, array) => value.length > 0 && array.indexOf(value) === index);
+  return classrooms.length === 1 ? classrooms[0] : "";
+}
+function formatImportedStudent(student) {
+  return [student.classroom, student.number ? `${student.number}\uBC88` : "", student.name].filter(Boolean).join(" ").trim();
+}
+
 // src/teacher-data.ts
 var import_obsidian = require("obsidian");
 async function loadTeacherPageData(app, settings) {
-  const [classSummary, lessonSummary, starLedger] = await Promise.all([
+  const [classSummary, lessonSummary, starLedger, roster, studentPhotoMap] = await Promise.all([
     loadAggregateFile(
       app,
       "class",
@@ -890,12 +1437,22 @@ async function loadTeacherPageData(app, settings) {
       settings.sources.starLedgerPath,
       "star-ledger",
       normalizeStarModeLedger
+    ),
+    loadStudentRoster(
+      app,
+      settings.roster.rosterJsonPath
+    ),
+    loadStudentPhotoMap(
+      app,
+      settings.studentPhotos.mappingJsonPath
     )
   ]);
   return {
     classSummary,
     lessonSummary,
-    starLedger
+    starLedger,
+    roster,
+    studentPhotoMap
   };
 }
 async function loadAggregateFile(app, kind, path, expectedType, parser) {
@@ -905,7 +1462,7 @@ async function loadAggregateFile(app, kind, path, expectedType, parser) {
       kind,
       path: "",
       status: "missing",
-      message: "\uC9D1\uACC4 \uD30C\uC77C \uACBD\uB85C\uAC00 \uBE44\uC5B4 \uC788\uC2B5\uB2C8\uB2E4. Settings -> classpage\uC5D0\uC11C \uC9D1\uACC4 \uD30C\uC77C \uACBD\uB85C\uB97C \uBA3C\uC800 \uC785\uB825\uD574 \uC8FC\uC138\uC694.",
+      message: "\uC9D1\uACC4 \uD30C\uC77C \uACBD\uB85C\uAC00 \uC544\uC9C1 \uBE44\uC5B4 \uC788\uC2B5\uB2C8\uB2E4. Settings -> classpage\uC5D0\uC11C \uACBD\uB85C\uB97C \uBA3C\uC800 \uC785\uB825\uD574 \uC8FC\uC138\uC694.",
       data: null
     };
   }
@@ -915,7 +1472,7 @@ async function loadAggregateFile(app, kind, path, expectedType, parser) {
       kind,
       path: normalizedPath,
       status: "missing",
-      message: "\uC124\uC815\uB41C \uACBD\uB85C\uC5D0 \uC9D1\uACC4 \uD30C\uC77C\uC774 \uC5C6\uC2B5\uB2C8\uB2E4. \uCC98\uC74C \uC5F0\uACB0 \uC911\uC774\uB77C\uBA74 \uC815\uC0C1\uC785\uB2C8\uB2E4. \uD30C\uC77C \uC0DD\uC131\uACFC \uACBD\uB85C\uB97C \uB2E4\uC2DC \uD655\uC778\uD574 \uC8FC\uC138\uC694.",
+      message: "\uC124\uC815\uB41C \uACBD\uB85C\uC5D0 \uC9D1\uACC4 \uD30C\uC77C\uC774 \uC5C6\uC2B5\uB2C8\uB2E4. \uCC98\uC74C \uC5F0\uACB0 \uC911\uC774\uB77C\uBA74 \uC815\uC0C1\uC77C \uC218 \uC788\uC73C\uB2C8 \uD30C\uC77C \uC0DD\uC131\uACFC \uACBD\uB85C\uB97C \uB2E4\uC2DC \uD655\uC778\uD574 \uC8FC\uC138\uC694.",
       data: null
     };
   }
@@ -936,7 +1493,7 @@ async function loadAggregateFile(app, kind, path, expectedType, parser) {
       data: parser(parsed)
     };
   } catch (error) {
-    const message = error instanceof SyntaxError ? `JSON \uD615\uC2DD \uC624\uB958: ${error.message}` : error instanceof Error ? error.message : "\uC54C \uC218 \uC5C6\uB294 \uC624\uB958";
+    const message = error instanceof SyntaxError ? `JSON \uD615\uC2DD \uC624\uB958: ${error.message}. \uD544\uC694\uD558\uBA74 \uD559\uC0DD \uBA85\uB2E8 \uAC00\uC838\uC624\uAE30 \uB3C4\uC6B0\uBBF8\uC5D0\uC11C \uB2E4\uC2DC \uC800\uC7A5\uD574\uB3C4 \uB429\uB2C8\uB2E4.` : error instanceof Error ? `${error.message} \uD544\uC694\uD558\uBA74 \uD559\uC0DD \uBA85\uB2E8 \uAC00\uC838\uC624\uAE30 \uB3C4\uC6B0\uBBF8\uC5D0\uC11C \uB2E4\uC2DC \uC800\uC7A5\uD574\uB3C4 \uB429\uB2C8\uB2E4.` : "\uC54C \uC218 \uC5C6\uB294 \uC624\uB958";
     const status = error instanceof SyntaxError || error instanceof Error ? "invalid" : "error";
     return {
       kind,
@@ -959,6 +1516,94 @@ function getAggregateTypeLabel(value) {
   }
   const type = value.type;
   return typeof type === "string" && type.trim().length > 0 ? type : "type \uC5C6\uC74C";
+}
+async function loadStudentRoster(app, path) {
+  const normalizedPath = (0, import_obsidian.normalizePath)(path.trim());
+  if (!normalizedPath) {
+    return {
+      path: "",
+      status: "disabled",
+      message: "\uD559\uC0DD \uBA85\uB2E8 JSON\uC774 \uC544\uC9C1 \uC124\uC815\uB418\uC9C0 \uC54A\uC558\uC2B5\uB2C8\uB2E4. \uD559\uC0DD \uBA85\uB2E8 \uAC00\uC838\uC624\uAE30 \uB3C4\uC6B0\uBBF8\uC5D0\uC11C CSV\uB97C \uC800\uC7A5\uD558\uAC70\uB098 \uAE30\uC874 JSON \uACBD\uB85C\uB97C \uC5F0\uACB0\uD558\uBA74 \uC751\uB2F5\uC774 \uC5C6\uB294 \uD559\uC0DD\uB3C4 \uBBF8\uC81C\uCD9C\uB85C \uD568\uAED8 \uD45C\uC2DC\uD569\uB2C8\uB2E4.",
+      data: null
+    };
+  }
+  const file = app.vault.getAbstractFileByPath(normalizedPath);
+  if (!(file instanceof import_obsidian.TFile)) {
+    return {
+      path: normalizedPath,
+      status: "missing",
+      message: "\uC124\uC815\uB41C \uACBD\uB85C\uC5D0 \uD559\uC0DD \uBA85\uB2E8 JSON \uD30C\uC77C\uC774 \uC5C6\uC2B5\uB2C8\uB2E4. \uACBD\uB85C\uC640 \uD30C\uC77C \uC774\uB984\uC744 \uB2E4\uC2DC \uD655\uC778\uD574 \uC8FC\uC138\uC694. \uBA85\uB2E8\uC774 \uC5C6\uC5B4\uB3C4 \uB2E4\uB978 \uD654\uBA74\uC740 \uACC4\uC18D \uC0AC\uC6A9\uD560 \uC218 \uC788\uC2B5\uB2C8\uB2E4.",
+      data: null
+    };
+  }
+  try {
+    const raw = await app.vault.cachedRead(file);
+    const parsed = JSON.parse(raw);
+    if (!hasExpectedAggregateType(parsed, "student-roster")) {
+      const actualType = getAggregateTypeLabel(parsed);
+      throw new Error(
+        `\uD559\uC0DD \uBA85\uB2E8 JSON\uC740 type\uC774 student-roster \uC774\uC5B4\uC57C \uD569\uB2C8\uB2E4. \uD604\uC7AC \uD30C\uC77C\uC740 ${actualType} \uC785\uB2C8\uB2E4.`
+      );
+    }
+    return {
+      path: normalizedPath,
+      status: "loaded",
+      message: "\uD559\uC0DD \uBA85\uB2E8\uC744 \uC77D\uC5C8\uC2B5\uB2C8\uB2E4.",
+      data: normalizeStudentRoster(parsed)
+    };
+  } catch (error) {
+    const message = error instanceof SyntaxError ? `JSON \uD615\uC2DD \uC624\uB958: ${error.message}. \uC0AC\uC9C4 \uC5C6\uC774\uB3C4 \uC120\uC0DD\uB2D8 \uD654\uBA74\uC740 \uACC4\uC18D \uC0AC\uC6A9\uD560 \uC218 \uC788\uC2B5\uB2C8\uB2E4.` : error instanceof Error ? `${error.message} \uC0AC\uC9C4 \uC5C6\uC774\uB3C4 \uC120\uC0DD\uB2D8 \uD654\uBA74\uC740 \uACC4\uC18D \uC0AC\uC6A9\uD560 \uC218 \uC788\uC2B5\uB2C8\uB2E4.` : "\uC54C \uC218 \uC5C6\uB294 \uC624\uB958";
+    return {
+      path: normalizedPath,
+      status: error instanceof SyntaxError || error instanceof Error ? "invalid" : "error",
+      message,
+      data: null
+    };
+  }
+}
+async function loadStudentPhotoMap(app, path) {
+  const normalizedPath = (0, import_obsidian.normalizePath)(path.trim());
+  if (!normalizedPath) {
+    return {
+      path: "",
+      status: "disabled",
+      message: "\uD559\uC0DD \uC0AC\uC9C4 \uB9E4\uD551 \uD30C\uC77C\uC774 \uC124\uC815\uB418\uC9C0 \uC54A\uC558\uC2B5\uB2C8\uB2E4. \uC0AC\uC9C4\uC774 \uC5C6\uC5B4\uB3C4 \uC120\uC0DD\uB2D8 \uD654\uBA74\uC740 \uC815\uC0C1\uC774\uBA70, \uD559\uC0DD\uC740 \uC774\uB2C8\uC15C \uC544\uBC14\uD0C0\uB85C \uD45C\uC2DC\uD569\uB2C8\uB2E4.",
+      data: null
+    };
+  }
+  const file = app.vault.getAbstractFileByPath(normalizedPath);
+  if (!(file instanceof import_obsidian.TFile)) {
+    return {
+      path: normalizedPath,
+      status: "missing",
+      message: "\uC124\uC815\uB41C \uACBD\uB85C\uC5D0 \uD559\uC0DD \uC0AC\uC9C4 \uB9E4\uD551 JSON \uD30C\uC77C\uC774 \uC5C6\uC2B5\uB2C8\uB2E4. \uACBD\uB85C\uB97C \uB2E4\uC2DC \uD655\uC778\uD574 \uC8FC\uC138\uC694. \uD30C\uC77C\uC774 \uC5C6\uC5B4\uB3C4 \uC774\uB2C8\uC15C \uC544\uBC14\uD0C0\uB85C \uACC4\uC18D \uBCFC \uC218 \uC788\uC2B5\uB2C8\uB2E4.",
+      data: null
+    };
+  }
+  try {
+    const raw = await app.vault.cachedRead(file);
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      throw new Error(
+        '\uD559\uC0DD \uC0AC\uC9C4 \uB9E4\uD551 JSON\uC740 { "classroom|number|name": "path/to/image" } \uD615\uC2DD\uC758 \uAC1D\uCCB4\uC5EC\uC57C \uD569\uB2C8\uB2E4.'
+      );
+    }
+    const data = normalizeStudentPhotoMap(parsed);
+    return {
+      path: normalizedPath,
+      status: "loaded",
+      message: "\uD559\uC0DD \uC0AC\uC9C4 \uB9E4\uD551\uC744 \uC77D\uC5C8\uC2B5\uB2C8\uB2E4.",
+      data
+    };
+  } catch (error) {
+    const message = error instanceof SyntaxError ? `JSON \uD615\uC2DD \uC624\uB958: ${error.message}` : error instanceof Error ? error.message : "\uC54C \uC218 \uC5C6\uB294 \uC624\uB958";
+    return {
+      path: normalizedPath,
+      status: error instanceof SyntaxError || error instanceof Error ? "invalid" : "error",
+      message,
+      data: null
+    };
+  }
 }
 
 // src/main.ts
@@ -1033,6 +1678,9 @@ var ClassPageView = class extends import_obsidian2.ItemView {
     this.lessonGroupSelection = "";
     this.starStudentQuery = "";
     this.starStudentFilterMode = "all";
+    this.studentRosterSource = null;
+    this.studentPhotoSource = null;
+    this.resolvedStudentPhotoCache = /* @__PURE__ */ new Map();
     this.renderToken = 0;
   }
   getViewType() {
@@ -1060,6 +1708,9 @@ var ClassPageView = class extends import_obsidian2.ItemView {
     if (token !== this.renderToken) {
       return;
     }
+    this.studentRosterSource = teacherData?.roster ?? null;
+    this.studentPhotoSource = teacherData?.studentPhotoMap ?? null;
+    this.resolvedStudentPhotoCache.clear();
     const { contentEl } = this;
     contentEl.empty();
     contentEl.addClass("classpage-view");
@@ -1144,6 +1795,9 @@ var ClassPageView = class extends import_obsidian2.ItemView {
   renderTeacherPage(parent, settings, teacherData) {
     this.renderTeacherContextCard(parent, teacherData);
     this.renderTeacherStatusSection(parent, teacherData);
+    if (this.teacherFocusMode === "overview") {
+      this.renderTeacherPrioritySection(parent, teacherData);
+    }
     if (this.shouldShowTeacherSection("class")) {
       const classSection = parent.createDiv({ cls: "classpage-section" });
       this.renderSectionHeader(
@@ -1196,6 +1850,10 @@ var ClassPageView = class extends import_obsidian2.ItemView {
   }
   renderTeacherContextCard(parent, teacherData) {
     const context = this.buildTeacherContextSummary(teacherData);
+    const preferenceLines = buildTeacherDashboardPreferenceSummaryLines(
+      this.getDashboardPreferences(),
+      { rosterStatus: teacherData?.roster?.status ?? "disabled" }
+    );
     const card = parent.createDiv({ cls: "classpage-card classpage-context-card" });
     const top = card.createDiv({ cls: "classpage-context-card__top" });
     top.createEl("span", {
@@ -1220,6 +1878,13 @@ var ClassPageView = class extends import_obsidian2.ItemView {
       cls: "classpage-context-card__description",
       text: context.description
     });
+    if (preferenceLines.length > 0) {
+      this.renderStructuredText(
+        card,
+        preferenceLines,
+        "classpage-context-card__meta"
+      );
+    }
   }
   renderBoundaryCard(parent, title, description, items) {
     const card = parent.createDiv({ cls: "classpage-card classpage-boundary-card" });
@@ -1260,8 +1925,8 @@ var ClassPageView = class extends import_obsidian2.ItemView {
     const section = parent.createDiv({ cls: "classpage-section" });
     this.renderSectionHeader(
       section,
-      "\uC624\uB298 \uC0C1\uD0DC",
-      "\uCE74\uB4DC\uB97C \uB20C\uB7EC \uD544\uC694\uD55C \uC601\uC5ED\uB9CC \uBCF4\uACE0, \uB2E4\uC2DC \uB204\uB974\uBA74 \uC804\uCCB4\uB97C \uBD05\uB2C8\uB2E4.",
+      "\uD55C\uB208\uC5D0 \uBCF4\uAE30",
+      "\uC5B4\uB290 \uC601\uC5ED\uC5D0\uC11C \uBA3C\uC800 \uC6C0\uC9C1\uC5EC\uC57C \uD558\uB294\uC9C0 \uC9E7\uAC8C \uBCF4\uACE0, \uCE74\uB4DC\uB97C \uB204\uB974\uBA74 \uADF8 \uC601\uC5ED\uB9CC \uC774\uC5B4\uC11C \uBD05\uB2C8\uB2E4.",
       {
         badgeText: this.buildTeacherContextSummary(teacherData).badgeText
       }
@@ -1337,6 +2002,818 @@ var ClassPageView = class extends import_obsidian2.ItemView {
       toggleMode();
     });
   }
+  renderTeacherPrioritySection(parent, teacherData) {
+    const section = parent.createDiv({ cls: "classpage-section" });
+    this.renderSectionHeader(
+      section,
+      "\uAD50\uC0AC \uC6B0\uC120\uC21C\uC704",
+      this.buildTeacherPrioritySectionDescription(teacherData),
+      {
+        badgeText: this.buildTeacherContextSummary(teacherData).badgeText
+      }
+    );
+    const grid = section.createDiv({ cls: "classpage-priority-grid" });
+    for (const card of this.buildTeacherPriorityCards(teacherData)) {
+      this.renderTeacherPriorityCard(grid, card);
+    }
+  }
+  buildTeacherPrioritySectionDescription(teacherData) {
+    const preferences = this.getDashboardPreferences();
+    const summaryLines = buildTeacherDashboardPreferenceSummaryLines(
+      preferences,
+      { rosterStatus: teacherData?.roster?.status ?? "disabled" }
+    );
+    const summary = summaryLines.slice(0, 2).join(" ");
+    return summary ? `\uCCAB \uD654\uBA74\uC5D0\uC11C \uC6B0\uC120\uC21C\uC704\uB97C \uBE60\uB974\uAC8C \uC77D\uC2B5\uB2C8\uB2E4. ${summary}` : "\uCCAB \uD654\uBA74\uC5D0\uC11C \uBA3C\uC800 \uBCFC \uD559\uC0DD, \uCE6D\uCC2C/\uACA9\uB824 \uB300\uC0C1, \uC218\uC5C5 \uD6C4\uC18D\uC9C0\uB3C4, \uCD5C\uADFC \uD65C\uB3D9 \uBCC0\uD654\uB97C \uD55C \uBC88\uC5D0 \uC815\uB9AC\uD588\uC2B5\uB2C8\uB2E4.";
+  }
+  getDashboardPreferences() {
+    return this.plugin.settings.teacherPage.dashboardPreferences;
+  }
+  getTeacherPriorityCardOrder(preferences) {
+    const baseOrder = this.getTeacherPriorityBaseOrder(preferences.preset);
+    const order = baseOrder.slice();
+    if (preferences.prioritizeMissingSubmissionsInOverview) {
+      moveArrayItemToFront(order, "missing-submissions");
+    }
+    if (preferences.prioritizeLessonFollowUpInOverview) {
+      moveArrayItemBefore(order, "lesson-follow-up", "praise");
+      moveArrayItemBefore(order, "attention", "praise");
+    }
+    if (!preferences.highlightMissingSubmissions) {
+      moveArrayItemToEnd(order, "missing-submissions");
+    }
+    if (!preferences.highlightAtRiskStudents) {
+      moveArrayItemToEnd(order, "attention");
+      moveArrayItemToEnd(order, "lesson-follow-up");
+    }
+    if (!preferences.highlightPraiseCandidates) {
+      moveArrayItemToEnd(order, "praise");
+      moveArrayItemToEnd(order, "star-movement");
+    }
+    return order;
+  }
+  getTeacherPriorityBaseOrder(preset) {
+    switch (preset) {
+      case "risk-focus":
+        return [
+          "attention",
+          "lesson-follow-up",
+          "missing-submissions",
+          "praise",
+          "star-movement"
+        ];
+      case "praise-focus":
+        return [
+          "praise",
+          "star-movement",
+          "attention",
+          "lesson-follow-up",
+          "missing-submissions"
+        ];
+      case "submission-focus":
+        return [
+          "missing-submissions",
+          "attention",
+          "lesson-follow-up",
+          "praise",
+          "star-movement"
+        ];
+      default:
+        return [
+          "attention",
+          "missing-submissions",
+          "praise",
+          "lesson-follow-up",
+          "star-movement"
+        ];
+    }
+  }
+  shouldShowPraiseBeforeRisk() {
+    const preferences = this.getDashboardPreferences();
+    return preferences.preset === "praise-focus" || preferences.highlightPraiseCandidates && !preferences.highlightAtRiskStudents;
+  }
+  renderTeacherPriorityCard(parent, cardData) {
+    const card = parent.createDiv({
+      cls: [
+        "classpage-card",
+        "classpage-priority-card",
+        cardData.tone ? `is-${cardData.tone}` : ""
+      ].filter(Boolean).join(" ")
+    });
+    const header = card.createDiv({ cls: "classpage-priority-card__header" });
+    const titleGroup = header.createDiv({ cls: "classpage-priority-card__title-group" });
+    titleGroup.createEl("h3", {
+      cls: "classpage-card__title classpage-priority-card__title",
+      text: cardData.title
+    });
+    titleGroup.createEl("span", {
+      cls: "classpage-context-badge classpage-priority-card__badge",
+      text: cardData.sourceLabel
+    });
+    card.createEl("strong", {
+      cls: "classpage-priority-card__value",
+      text: cardData.value
+    });
+    if (cardData.meta) {
+      card.createEl("p", {
+        cls: "classpage-priority-card__meta",
+        text: cardData.meta
+      });
+    }
+    if (cardData.rows.length > 0) {
+      const list = card.createDiv({ cls: "classpage-priority-card__list" });
+      for (const row of cardData.rows.slice(0, 4)) {
+        const item = list.createDiv({
+          cls: [
+            "classpage-priority-card__item",
+            row.tone ? `is-${row.tone}` : ""
+          ].filter(Boolean).join(" ")
+        });
+        const content = item.createDiv({ cls: "classpage-priority-card__item-content" });
+        if (row.student) {
+          this.renderStudentAvatar(content, row.student, "small");
+        }
+        const text = content.createDiv({ cls: "classpage-priority-card__item-text" });
+        const itemHeader = text.createDiv({ cls: "classpage-priority-card__item-header" });
+        itemHeader.createEl("strong", {
+          cls: "classpage-priority-card__item-title",
+          text: row.title
+        });
+        if (row.meta) {
+          itemHeader.createEl("span", {
+            cls: "classpage-detail-list__meta classpage-priority-card__item-meta",
+            text: row.meta
+          });
+        }
+        this.renderStructuredText(
+          text,
+          row.detailLines?.length ? row.detailLines.slice(0, 2) : row.description ? [row.description] : [],
+          "classpage-priority-card__item-description"
+        );
+      }
+    } else {
+      card.createEl("p", {
+        cls: "classpage-empty-card__message classpage-priority-card__empty",
+        text: cardData.emptyMessage
+      });
+    }
+    card.createEl("p", {
+      cls: "classpage-priority-card__hint",
+      text: cardData.hint
+    });
+  }
+  buildTeacherPriorityCards(teacherData) {
+    const preferences = this.getDashboardPreferences();
+    const cards = [
+      this.buildTeacherMissingSubmissionPriorityCard(teacherData),
+      this.buildTeacherAttentionPriorityCard(teacherData),
+      this.buildTeacherPraisePriorityCard(teacherData),
+      this.buildTeacherLessonFollowUpPriorityCard(teacherData),
+      this.buildTeacherStarMovementPriorityCard(teacherData)
+    ];
+    const order = this.getTeacherPriorityCardOrder(preferences);
+    const orderMap = new Map(order.map((id, index) => [id, index]));
+    return cards.sort(
+      (left, right) => (orderMap.get(left.id) ?? Number.MAX_SAFE_INTEGER) - (orderMap.get(right.id) ?? Number.MAX_SAFE_INTEGER)
+    );
+  }
+  buildTeacherMissingSubmissionPriorityCard(teacherData) {
+    const preferences = this.getDashboardPreferences();
+    const roster = this.getLoadedRosterData(teacherData?.roster);
+    const classSummary = this.getLoadedAggregateData(teacherData?.classSummary);
+    const lessonSummary = this.getLoadedAggregateData(teacherData?.lessonSummary);
+    const lessonGroup = lessonSummary ? this.getLessonExplorerState(lessonSummary).selectedGroup : null;
+    const classSnapshot = classSummary ? this.buildMissingSubmissionSnapshot(
+      "\uD559\uAE09\uC6A9 \uD3FC",
+      classSummary.classroom,
+      classSummary.studentResponses.map((item) => item.student)
+    ) : null;
+    const lessonSnapshot = lessonGroup ? this.buildMissingSubmissionSnapshot(
+      "\uD604\uC7AC \uC120\uD0DD\uD55C \uC218\uC5C5",
+      lessonGroup.classroom || lessonSummary?.classroom || "",
+      lessonGroup.studentResponses.map((item) => item.student)
+    ) : null;
+    const rows = this.mergeTeacherPriorityRows([
+      ...classSnapshot ? this.buildMissingSubmissionRows(classSnapshot) : [],
+      ...lessonSnapshot ? this.buildMissingSubmissionRows(lessonSnapshot) : []
+    ]);
+    const sourceLabel = [
+      roster ? "\uBA85\uB2E8" : "",
+      classSnapshot ? "\uD559\uAE09" : "",
+      lessonSnapshot ? "\uC218\uC5C5" : ""
+    ].filter(Boolean).join(" + ") || "\uBA85\uB2E8 + \uD559\uAE09/\uC218\uC5C5";
+    if (rows.length > 0) {
+      return {
+        id: "missing-submissions",
+        title: "\uC544\uC9C1 \uC81C\uCD9C\uD558\uC9C0 \uC54A\uC740 \uD559\uC0DD",
+        sourceLabel,
+        value: `${rows.length}\uBA85`,
+        meta: [
+          classSnapshot?.missingStudents.length ? `\uD559\uAE09 ${classSnapshot.missingStudents.length}\uBA85` : "",
+          lessonSnapshot?.missingStudents.length ? `\uD604\uC7AC \uC218\uC5C5 ${lessonSnapshot.missingStudents.length}\uBA85` : ""
+        ].filter(Boolean).join(" \xB7 ") || `${this.buildTeacherPriorityPreviewLabel(rows)}\uBD80\uD130 \uD655\uC778`,
+        hint: "\uD559\uC0DD \uBA85\uB2E8\uACFC \uC81C\uCD9C \uC751\uB2F5\uC744 \uBE44\uAD50\uD574, \uC751\uB2F5 \uAE30\uB85D\uC774 \uC544\uC608 \uC5C6\uB294 \uD559\uC0DD\uB3C4 \uBC14\uB85C \uC7A1\uC544\uB0C5\uB2C8\uB2E4.",
+        rows,
+        emptyMessage: "\uD604\uC7AC \uBBF8\uC81C\uCD9C \uD559\uC0DD\uC774 \uC5C6\uC2B5\uB2C8\uB2E4.",
+        tone: preferences.highlightMissingSubmissions ? "warning" : void 0
+      };
+    }
+    if (!teacherData?.roster || teacherData.roster.status === "disabled") {
+      return {
+        id: "missing-submissions",
+        title: "\uC544\uC9C1 \uC81C\uCD9C\uD558\uC9C0 \uC54A\uC740 \uD559\uC0DD",
+        sourceLabel: "\uBA85\uB2E8",
+        value: "\uC5F0\uACB0 \uC804",
+        meta: "\uD559\uC0DD \uBA85\uB2E8 JSON\uC774 \uC544\uC9C1 \uC124\uC815\uB418\uC9C0 \uC54A\uC558\uC2B5\uB2C8\uB2E4.",
+        hint: "\uD559\uC0DD \uBA85\uB2E8 \uAC00\uC838\uC624\uAE30 \uB3C4\uC6B0\uBBF8\uC5D0\uC11C CSV\uB97C \uC800\uC7A5\uD558\uAC70\uB098 \uAE30\uC874 JSON \uACBD\uB85C\uB97C \uC5F0\uACB0\uD558\uBA74 \uC81C\uCD9C \uC751\uB2F5\uC5D0 \uC544\uC608 \uC548 \uBCF4\uC774\uB294 \uD559\uC0DD\uB3C4 \uC5EC\uAE30 \uBC14\uB85C \uD45C\uC2DC\uB429\uB2C8\uB2E4.",
+        rows: [],
+        emptyMessage: "\uD559\uC0DD \uBA85\uB2E8 \uAC00\uC838\uC624\uAE30 \uB3C4\uC6B0\uBBF8\uC5D0\uC11C CSV\uB97C \uC800\uC7A5\uD558\uAC70\uB098 \uD559\uC0DD \uBA85\uB2E8 JSON \uACBD\uB85C\uB97C \uC5F0\uACB0\uD558\uBA74 \uC5EC\uAE30\uC5D0 \uBBF8\uC81C\uCD9C \uD559\uC0DD\uC774 \uBCF4\uC785\uB2C8\uB2E4.",
+        tone: preferences.highlightMissingSubmissions ? "warning" : void 0
+      };
+    }
+    if (teacherData.roster.status !== "loaded" || !roster) {
+      return {
+        id: "missing-submissions",
+        title: "\uC544\uC9C1 \uC81C\uCD9C\uD558\uC9C0 \uC54A\uC740 \uD559\uC0DD",
+        sourceLabel: "\uBA85\uB2E8",
+        value: teacherData.roster.status === "invalid" ? "\uD615\uC2DD \uD655\uC778" : "\uD655\uC778 \uD544\uC694",
+        meta: teacherData.roster.message,
+        hint: "\uBA85\uB2E8 JSON \uD615\uC2DD\uC744 \uB2E4\uC2DC \uD655\uC778\uD558\uAC70\uB098 CSV \uB3C4\uC6B0\uBBF8\uB85C \uB2E4\uC2DC \uC800\uC7A5\uD574 \uC5F0\uACB0\uD558\uBA74 \uC751\uB2F5\uC774 \uC5C6\uB294 \uD559\uC0DD\uB3C4 \uC790\uB3D9 \uBE44\uAD50\uD560 \uC218 \uC788\uC2B5\uB2C8\uB2E4.",
+        rows: [],
+        emptyMessage: teacherData.roster.message,
+        tone: preferences.highlightMissingSubmissions ? "warning" : void 0
+      };
+    }
+    if (!classSummary && !lessonSummary) {
+      return {
+        id: "missing-submissions",
+        title: "\uC544\uC9C1 \uC81C\uCD9C\uD558\uC9C0 \uC54A\uC740 \uD559\uC0DD",
+        sourceLabel: "\uBA85\uB2E8",
+        value: `${roster.students.length}\uBA85`,
+        meta: "\uBA85\uB2E8\uC740 \uC77D\uC5C8\uC9C0\uB9CC \uBE44\uAD50\uD560 \uD559\uAE09/\uC218\uC5C5 \uC9D1\uACC4\uAC00 \uC544\uC9C1 \uC5C6\uC2B5\uB2C8\uB2E4.",
+        hint: "\uD559\uAE09 \uC9D1\uACC4\uB098 \uC218\uC5C5 \uC9D1\uACC4\uAC00 \uC5F0\uACB0\uB418\uBA74 \uB204\uAC00 \uBE60\uC84C\uB294\uC9C0 \uBC14\uB85C \uBE44\uAD50\uD574 \uBCF4\uC5EC\uC90D\uB2C8\uB2E4.",
+        rows: [],
+        emptyMessage: "\uD559\uAE09 \uB610\uB294 \uC218\uC5C5 \uC9D1\uACC4\uAC00 \uC5F0\uACB0\uB418\uBA74 \uC5EC\uAE30\uC5D0 \uBBF8\uC81C\uCD9C \uD559\uC0DD\uC774 \uD45C\uC2DC\uB429\uB2C8\uB2E4.",
+        tone: preferences.highlightMissingSubmissions ? "warning" : void 0
+      };
+    }
+    const fallbackMessage = lessonSummary && !lessonGroup ? "\uC120\uD0DD\uD55C \uC870\uAC74\uC5D0 \uB9DE\uB294 \uC218\uC5C5 \uADF8\uB8F9\uC774 \uC5C6\uC5B4 \uD604\uC7AC \uC218\uC5C5 \uBBF8\uC81C\uCD9C \uBE44\uAD50\uB294 \uC544\uC9C1 \uD560 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4." : classSnapshot?.message || lessonSnapshot?.message || "\uD604\uC7AC \uBC94\uC704\uC5D0\uC11C\uB294 \uBAA8\uB450 \uC81C\uCD9C\uD588\uC2B5\uB2C8\uB2E4.";
+    return {
+      id: "missing-submissions",
+      title: "\uC544\uC9C1 \uC81C\uCD9C\uD558\uC9C0 \uC54A\uC740 \uD559\uC0DD",
+      sourceLabel,
+      value: "0\uBA85",
+      meta: fallbackMessage,
+      hint: "\uBA85\uB2E8\uACFC \uD604\uC7AC \uBC94\uC704\uB97C \uBE44\uAD50\uD55C \uACB0\uACFC, \uC9C0\uAE08\uC740 \uB530\uB85C \uD655\uC778\uD560 \uBBF8\uC81C\uCD9C \uD559\uC0DD\uC774 \uC5C6\uC2B5\uB2C8\uB2E4.",
+      rows: [],
+      emptyMessage: fallbackMessage,
+      tone: preferences.highlightMissingSubmissions ? "positive" : void 0
+    };
+  }
+  buildTeacherAttentionPriorityCard(teacherData) {
+    const preferences = this.getDashboardPreferences();
+    const classSummary = this.getLoadedAggregateData(teacherData?.classSummary);
+    const lessonSummary = this.getLoadedAggregateData(teacherData?.lessonSummary);
+    const lessonGroup = lessonSummary ? this.getLessonExplorerState(lessonSummary).selectedGroup : null;
+    const rows = this.mergeTeacherPriorityRows([
+      ...lessonGroup ? this.buildTeacherLessonFollowUpPriorityRows(lessonGroup) : [],
+      ...classSummary ? this.buildTeacherClassSupportPriorityRows(classSummary) : []
+    ]);
+    const sourceLabel = [classSummary ? "\uD559\uAE09" : "", lessonGroup ? "\uC218\uC5C5" : ""].filter(Boolean).join(" + ") || "\uD559\uAE09 + \uC218\uC5C5";
+    if (rows.length > 0) {
+      return {
+        id: "attention",
+        title: "\uC9C0\uAE08 \uBA3C\uC800 \uBCFC \uD559\uC0DD",
+        sourceLabel,
+        value: `${rows.length}\uBA85`,
+        meta: `${this.buildTeacherPriorityPreviewLabel(rows)}\uBD80\uD130 \uD655\uC778`,
+        hint: "\uC815\uC11C\xB7\uBAA9\uD45C \uC0C1\uD0DC\uC640 \uC218\uC5C5 \uD6C4\uC18D\uC9C0\uB3C4\uB97C \uD568\uAED8 \uBB36\uC5C8\uC2B5\uB2C8\uB2E4.",
+        rows,
+        emptyMessage: "\uC9C0\uAE08 \uBC14\uB85C \uBA48\uCDB0\uC11C \uBCFC \uD559\uC0DD\uC774 \uC5C6\uC2B5\uB2C8\uB2E4.",
+        tone: preferences.highlightAtRiskStudents ? "warning" : void 0
+      };
+    }
+    if (!classSummary && !lessonSummary) {
+      return {
+        id: "attention",
+        title: "\uC9C0\uAE08 \uBA3C\uC800 \uBCFC \uD559\uC0DD",
+        sourceLabel,
+        value: "\uC5F0\uACB0 \uD544\uC694",
+        meta: "\uD559\uAE09 \uB610\uB294 \uC218\uC5C5 \uC9D1\uACC4\uAC00 \uC544\uC9C1 \uC5C6\uC2B5\uB2C8\uB2E4.",
+        hint: "\uD30C\uC77C \uC0C1\uD0DC\uB97C \uBA3C\uC800 \uD655\uC778\uD558\uBA74 \uC774 \uCE74\uB4DC\uC5D0 \uC6B0\uC120 \uD559\uC0DD\uC774 \uBC14\uB85C \uBCF4\uC785\uB2C8\uB2E4.",
+        rows: [],
+        emptyMessage: "\uD559\uAE09 \uB610\uB294 \uC218\uC5C5 \uC9D1\uACC4\uAC00 \uC5F0\uACB0\uB418\uBA74 \uC5EC\uAE30\uC5D0 \uD45C\uC2DC\uB429\uB2C8\uB2E4.",
+        tone: preferences.highlightAtRiskStudents ? "warning" : void 0
+      };
+    }
+    return {
+      id: "attention",
+      title: "\uC9C0\uAE08 \uBA3C\uC800 \uBCFC \uD559\uC0DD",
+      sourceLabel,
+      value: "0\uBA85",
+      meta: lessonSummary && !lessonGroup ? "\uC120\uD0DD\uD55C \uC870\uAC74\uC5D0 \uB9DE\uB294 \uC218\uC5C5 \uADF8\uB8F9\uC774 \uC5C6\uC2B5\uB2C8\uB2E4." : "\uC9C0\uAE08 \uBC14\uB85C \uC6B0\uC120 \uD655\uC778\uD560 \uD559\uC0DD\uC774 \uC5C6\uC2B5\uB2C8\uB2E4.",
+      hint: lessonSummary && !lessonGroup ? "\uC218\uC5C5 \uBE60\uB974\uAC8C \uCC3E\uAE30\uC5D0\uC11C \uD544\uD130\uB97C \uB113\uD788\uBA74 \uD6C4\uC18D\uC9C0\uB3C4 \uB300\uC0C1\uC774 \uB2E4\uC2DC \uBCF4\uC785\uB2C8\uB2E4." : "\uD604\uC7AC \uC9D1\uACC4 \uAE30\uC900\uC73C\uB85C \uAE09\uD558\uAC8C \uBA3C\uC800 \uCC59\uAE38 \uD559\uC0DD\uC740 \uC5C6\uC2B5\uB2C8\uB2E4.",
+      rows: [],
+      emptyMessage: "\uC9C0\uAE08 \uBC14\uB85C \uBA48\uCDB0\uC11C \uBCFC \uD559\uC0DD\uC774 \uC5C6\uC2B5\uB2C8\uB2E4.",
+      tone: preferences.highlightAtRiskStudents ? "positive" : void 0
+    };
+  }
+  buildTeacherPraisePriorityCard(teacherData) {
+    const preferences = this.getDashboardPreferences();
+    const classSummary = this.getLoadedAggregateData(teacherData?.classSummary);
+    const rows = classSummary ? this.buildTeacherPraisePriorityRows(classSummary) : [];
+    if (rows.length > 0) {
+      return {
+        id: "praise",
+        title: "\uCE6D\uCC2C/\uACA9\uB824\uD560 \uD559\uC0DD",
+        sourceLabel: "\uD559\uAE09",
+        value: `${rows.length}\uBA85`,
+        meta: `${this.buildTeacherPriorityPreviewLabel(rows)} \uCE6D\uCC2C\uD558\uAE30 \uC88B\uC74C`,
+        hint: "\uC9E7\uAC8C \uBD88\uB7EC \uCE6D\uCC2C\uD558\uAC70\uB098 \uCE5C\uAD6C \uB3C4\uC6C0\uC744 \uC5B8\uAE09\uD560 \uD559\uC0DD\uC744 \uBAA8\uC558\uC2B5\uB2C8\uB2E4.",
+        rows,
+        emptyMessage: "\uC9C0\uAE08 \uCE6D\uCC2C/\uACA9\uB824 \uD6C4\uBCF4\uB85C \uBAA8\uC778 \uD559\uC0DD\uC774 \uC5C6\uC2B5\uB2C8\uB2E4.",
+        tone: preferences.highlightPraiseCandidates ? "positive" : void 0
+      };
+    }
+    if (!classSummary) {
+      return {
+        id: "praise",
+        title: "\uCE6D\uCC2C/\uACA9\uB824\uD560 \uD559\uC0DD",
+        sourceLabel: "\uD559\uAE09",
+        value: "\uC5F0\uACB0 \uD544\uC694",
+        meta: "\uD559\uAE09 \uC9D1\uACC4\uAC00 \uC544\uC9C1 \uC5C6\uC2B5\uB2C8\uB2E4.",
+        hint: "\uD559\uAE09 \uC9D1\uACC4\uAC00 \uC5F0\uACB0\uB418\uBA74 \uCE6D\uCC2C/\uACA9\uB824 \uD6C4\uBCF4\uAC00 \uC5EC\uAE30 \uBA3C\uC800 \uBCF4\uC785\uB2C8\uB2E4.",
+        rows: [],
+        emptyMessage: "\uD559\uAE09 \uC9D1\uACC4\uAC00 \uC5F0\uACB0\uB418\uBA74 \uC5EC\uAE30\uC5D0 \uD45C\uC2DC\uB429\uB2C8\uB2E4.",
+        tone: preferences.highlightPraiseCandidates ? "positive" : void 0
+      };
+    }
+    return {
+      id: "praise",
+      title: "\uCE6D\uCC2C/\uACA9\uB824\uD560 \uD559\uC0DD",
+      sourceLabel: "\uD559\uAE09",
+      value: "0\uBA85",
+      meta: "\uC9C0\uAE08 \uBC14\uB85C \uB744\uC6CC\uC11C \uCE6D\uCC2C\uD560 \uD559\uC0DD\uC774 \uC5C6\uC2B5\uB2C8\uB2E4.",
+      hint: "\uD559\uAE09 \uC0C1\uC138\uC5D0\uC11C \uC804\uCCB4 \uCE6D\uCC2C \uD6C4\uBCF4\uC640 \uC774\uC720\uB97C \uACC4\uC18D \uD655\uC778\uD560 \uC218 \uC788\uC2B5\uB2C8\uB2E4.",
+      rows: [],
+      emptyMessage: "\uC9C0\uAE08 \uCE6D\uCC2C/\uACA9\uB824 \uD6C4\uBCF4\uB85C \uBAA8\uC778 \uD559\uC0DD\uC774 \uC5C6\uC2B5\uB2C8\uB2E4.",
+      tone: preferences.highlightPraiseCandidates ? "positive" : void 0
+    };
+  }
+  buildTeacherLessonFollowUpPriorityCard(teacherData) {
+    const preferences = this.getDashboardPreferences();
+    const lessonSummary = this.getLoadedAggregateData(teacherData?.lessonSummary);
+    const lessonGroup = lessonSummary ? this.getLessonExplorerState(lessonSummary).selectedGroup : null;
+    const rows = lessonGroup ? this.buildTeacherLessonFollowUpPriorityRows(lessonGroup) : [];
+    if (rows.length > 0) {
+      const topConcept = lessonGroup?.difficultConcepts[0]?.concept || "";
+      return {
+        id: "lesson-follow-up",
+        title: "\uC218\uC5C5 \uD6C4\uC18D\uC9C0\uB3C4 \uC6B0\uC120",
+        sourceLabel: "\uC218\uC5C5",
+        value: `${rows.length}\uBA85`,
+        meta: topConcept ? `${this.buildTeacherPriorityPreviewLabel(rows)} \xB7 \uC7AC\uC124\uBA85 \uAC1C\uB150 ${topConcept}` : `${this.buildTeacherPriorityPreviewLabel(rows)}\uBD80\uD130 \uD655\uC778`,
+        hint: "\uB2E4\uC74C \uCC28\uC2DC \uC2DC\uC791 \uC804\uC774\uB098 \uC218\uC5C5 \uC9C1\uD6C4\uC5D0 \uBA3C\uC800 \uB2E4\uC2DC \uBCFC \uD559\uC0DD\uC785\uB2C8\uB2E4.",
+        rows,
+        emptyMessage: "\uC9C0\uAE08 \uD6C4\uC18D\uC9C0\uB3C4\uAC00 \uD544\uC694\uD55C \uD559\uC0DD\uC774 \uC5C6\uC2B5\uB2C8\uB2E4.",
+        tone: preferences.highlightAtRiskStudents ? "warning" : void 0
+      };
+    }
+    if (!lessonSummary) {
+      return {
+        id: "lesson-follow-up",
+        title: "\uC218\uC5C5 \uD6C4\uC18D\uC9C0\uB3C4 \uC6B0\uC120",
+        sourceLabel: "\uC218\uC5C5",
+        value: "\uC5F0\uACB0 \uD544\uC694",
+        meta: "\uC218\uC5C5 \uC9D1\uACC4\uAC00 \uC544\uC9C1 \uC5C6\uC2B5\uB2C8\uB2E4.",
+        hint: "\uC218\uC5C5 \uC9D1\uACC4\uAC00 \uC5F0\uACB0\uB418\uBA74 \uD6C4\uC18D\uC9C0\uB3C4 \uD559\uC0DD\uACFC \uC7AC\uC124\uBA85 \uAC1C\uB150\uC774 \uC5EC\uAE30 \uBA3C\uC800 \uBCF4\uC785\uB2C8\uB2E4.",
+        rows: [],
+        emptyMessage: "\uC218\uC5C5 \uC9D1\uACC4\uAC00 \uC5F0\uACB0\uB418\uBA74 \uC5EC\uAE30\uC5D0 \uD45C\uC2DC\uB429\uB2C8\uB2E4.",
+        tone: preferences.highlightAtRiskStudents ? "warning" : void 0
+      };
+    }
+    return {
+      id: "lesson-follow-up",
+      title: "\uC218\uC5C5 \uD6C4\uC18D\uC9C0\uB3C4 \uC6B0\uC120",
+      sourceLabel: "\uC218\uC5C5",
+      value: "0\uBA85",
+      meta: lessonGroup ? "\uC9C0\uAE08 \uBC14\uB85C \uD6C4\uC18D\uC9C0\uB3C4\uAC00 \uD544\uC694\uD55C \uD559\uC0DD\uC774 \uC5C6\uC2B5\uB2C8\uB2E4." : "\uC120\uD0DD\uD55C \uC870\uAC74\uC5D0 \uB9DE\uB294 \uC218\uC5C5 \uADF8\uB8F9\uC774 \uC5C6\uC2B5\uB2C8\uB2E4.",
+      hint: lessonGroup ? "\uD604\uC7AC \uC120\uD0DD\uD55C \uC218\uC5C5 \uAE30\uC900\uC73C\uB85C \uAE09\uD55C \uD6C4\uC18D\uC9C0\uB3C4 \uB300\uC0C1\uC774 \uC5C6\uC2B5\uB2C8\uB2E4." : "\uC218\uC5C5 \uBE60\uB974\uAC8C \uCC3E\uAE30\uC5D0\uC11C \uACFC\uBAA9\xB7\uB2E8\uC6D0\xB7\uB0A0\uC9DC \uBC94\uC704\uB97C \uB113\uD600 \uBCF4\uC138\uC694.",
+      rows: [],
+      emptyMessage: "\uC9C0\uAE08 \uD6C4\uC18D\uC9C0\uB3C4\uAC00 \uD544\uC694\uD55C \uD559\uC0DD\uC774 \uC5C6\uC2B5\uB2C8\uB2E4.",
+      tone: preferences.highlightAtRiskStudents ? "positive" : void 0
+    };
+  }
+  buildTeacherStarMovementPriorityCard(teacherData) {
+    const preferences = this.getDashboardPreferences();
+    const ledger = this.getLoadedAggregateData(teacherData?.starLedger);
+    const rows = ledger ? this.buildTeacherStarMovementPriorityRows(ledger) : [];
+    if (rows.length > 0 && ledger) {
+      const eventMap = this.buildStarRecentEventMap(ledger.recentEvents);
+      const recentStudentCount = ledger.totals.filter(
+        (total) => (eventMap.get(total.studentKey) ?? []).length > 0
+      ).length;
+      const positiveRecentCount = ledger.totals.filter(
+        (total) => ((eventMap.get(total.studentKey) ?? [])[0]?.delta ?? 0) > 0
+      ).length;
+      const adjustedCount = ledger.totals.filter((total) => total.hiddenAdjustmentTotal !== 0).length;
+      return {
+        id: "star-movement",
+        title: "\uCD5C\uADFC \uBCC4\uC810/\uD65C\uB3D9 \uBCC0\uD654",
+        sourceLabel: "\uBCC4\uC810",
+        value: `${rows.length}\uBA85`,
+        meta: [
+          recentStudentCount > 0 ? `\uCD5C\uADFC \uC6C0\uC9C1\uC784 ${recentStudentCount}\uBA85` : "",
+          positiveRecentCount > 0 ? `\uCD5C\uADFC \uC62C\uB77C\uAC04 \uD559\uC0DD ${positiveRecentCount}\uBA85` : "",
+          adjustedCount > 0 ? `\uC228\uAE40 \uC870\uC815 ${adjustedCount}\uBA85` : ""
+        ].filter(Boolean).join(" \xB7 ") || `${this.buildTeacherPriorityPreviewLabel(rows)} \uD65C\uB3D9 \uD655\uC778`,
+        hint: "\uCD5C\uADFC \uC6C0\uC9C1\uC784\uC774 \uBCF4\uC778 \uD559\uC0DD\uACFC \uC870\uC815\uC774 \uBC18\uC601\uB41C \uD559\uC0DD\uC744 \uBE60\uB974\uAC8C \uC77D\uC2B5\uB2C8\uB2E4.",
+        rows,
+        emptyMessage: "\uCD5C\uADFC \uD65C\uB3D9 \uBCC0\uD654\uAC00 \uBCF4\uC774\uB294 \uD559\uC0DD\uC774 \uC5C6\uC2B5\uB2C8\uB2E4.",
+        tone: preferences.highlightPraiseCandidates ? "positive" : rows.some((row) => row.tone === "warning") ? "warning" : void 0
+      };
+    }
+    if (!ledger) {
+      return {
+        id: "star-movement",
+        title: "\uCD5C\uADFC \uBCC4\uC810/\uD65C\uB3D9 \uBCC0\uD654",
+        sourceLabel: "\uBCC4\uC810",
+        value: "\uC5F0\uACB0 \uD544\uC694",
+        meta: "\uBCC4\uC810 \uC9D1\uACC4\uAC00 \uC544\uC9C1 \uC5C6\uC2B5\uB2C8\uB2E4.",
+        hint: "\uBCC4\uC810 \uC9D1\uACC4\uAC00 \uC5F0\uACB0\uB418\uBA74 \uCD5C\uADFC \uD65C\uB3D9 \uD559\uC0DD\uACFC \uBCC0\uD654\uAC00 \uC5EC\uAE30 \uBA3C\uC800 \uBCF4\uC785\uB2C8\uB2E4.",
+        rows: [],
+        emptyMessage: "\uBCC4\uC810 \uC9D1\uACC4\uAC00 \uC5F0\uACB0\uB418\uBA74 \uC5EC\uAE30\uC5D0 \uD45C\uC2DC\uB429\uB2C8\uB2E4.",
+        tone: preferences.highlightPraiseCandidates ? "positive" : void 0
+      };
+    }
+    return {
+      id: "star-movement",
+      title: "\uCD5C\uADFC \uBCC4\uC810/\uD65C\uB3D9 \uBCC0\uD654",
+      sourceLabel: "\uBCC4\uC810",
+      value: "0\uBA85",
+      meta: "\uCD5C\uADFC \uD45C\uC2DC \uC774\uBCA4\uD2B8\uC5D0 \uC7A1\uD78C \uD559\uC0DD\uC774 \uC5C6\uC2B5\uB2C8\uB2E4.",
+      hint: "\uCD5C\uADFC \uC774\uBCA4\uD2B8\uAC00 \uC5C6\uC5B4\uB3C4 \uBCC4\uC810 \uC0C1\uC138\uC5D0\uC11C \uC804\uCCB4 \uD559\uC0DD \uB204\uC801\uACFC \uADDC\uCE59\uBCC4 \uD750\uB984\uC744 \uBCFC \uC218 \uC788\uC2B5\uB2C8\uB2E4.",
+      rows: [],
+      emptyMessage: "\uCD5C\uADFC \uD65C\uB3D9 \uBCC0\uD654\uAC00 \uBCF4\uC774\uB294 \uD559\uC0DD\uC774 \uC5C6\uC2B5\uB2C8\uB2E4."
+    };
+  }
+  buildTeacherClassSupportPriorityRows(summary) {
+    const responseMap = this.buildStudentResponseMap(summary.studentResponses);
+    return summary.supportStudents.map((student) => {
+      const response = this.findClassResponseByStudent(responseMap, student.student);
+      const details = buildStructuredText([
+        student.reason ? `\uC0C1\uD0DC \uC774\uC720: ${student.reason}` : "",
+        student.goal ? `\uC624\uB298 \uBAA9\uD45C: ${student.goal}` : "",
+        student.teacherNote ? `\uBA54\uBAA8: ${student.teacherNote}` : ""
+      ], "\uD559\uAE09 \uC0C1\uD0DC \uD655\uC778");
+      return {
+        title: formatStudentLabel(student.student),
+        meta: [
+          "\uD559\uAE09 \uC0C1\uD0DC",
+          response?.emotionLabel ? `\uC815\uC11C ${response.emotionLabel}` : "",
+          response?.goalLabel ? `\uBAA9\uD45C ${response.goalLabel}` : ""
+        ].filter(Boolean).join(" \xB7 "),
+        description: details.text,
+        detailLines: details.lines,
+        tone: "warning",
+        student: student.student
+      };
+    });
+  }
+  buildTeacherPraisePriorityRows(summary) {
+    const responseMap = this.buildStudentResponseMap(summary.studentResponses);
+    return summary.praiseCandidates.map((student) => {
+      const response = this.findClassResponseByStudent(responseMap, student.student);
+      const details = buildStructuredText([
+        student.reason ? `\uC774\uC720: ${student.reason}` : "",
+        student.mentionedPeer ? `\uD568\uAED8 \uC5B8\uAE09\uD55C \uCE5C\uAD6C: ${student.mentionedPeer}` : "",
+        response?.helpedFriend ? `\uB3C4\uC6C0\uC744 \uC900 \uCE5C\uAD6C \uAE30\uB85D: ${response.helpedFriend}` : ""
+      ], "\uCE6D\uCC2C \uC0AC\uC720 \uD655\uC778");
+      return {
+        title: formatStudentLabel(student.student),
+        meta: [
+          "\uD559\uAE09 \uCE6D\uCC2C",
+          response?.goalLabel ? `\uBAA9\uD45C ${response.goalLabel}` : ""
+        ].filter(Boolean).join(" \xB7 "),
+        description: details.text,
+        detailLines: details.lines,
+        tone: "positive",
+        student: student.student
+      };
+    });
+  }
+  buildTeacherLessonFollowUpPriorityRows(summary) {
+    const responseMap = this.buildLessonResponseMap(summary.studentResponses);
+    return this.buildLessonFollowUpDrilldownItems(summary, responseMap).map((item) => ({
+      title: item.title,
+      meta: ["\uC218\uC5C5 \uD6C4\uC18D", item.meta].filter(Boolean).join(" \xB7 "),
+      description: item.summary,
+      detailLines: item.summaryLines,
+      tone: item.tone ?? "warning",
+      student: item.student
+    }));
+  }
+  buildTeacherStarMovementPriorityRows(ledger) {
+    const eventMap = this.buildStarRecentEventMap(ledger.recentEvents);
+    const recentTotals = this.sortStarTotalsByRecentPreview(ledger.totals, eventMap).filter((total) => (eventMap.get(total.studentKey) ?? []).length > 0);
+    const activeTotals = recentTotals.length > 0 ? recentTotals : ledger.totals.slice().sort((left, right) => {
+      if (right.eventCount !== left.eventCount) {
+        return right.eventCount - left.eventCount;
+      }
+      if (right.visibleTotal !== left.visibleTotal) {
+        return right.visibleTotal - left.visibleTotal;
+      }
+      return right.total - left.total;
+    }).filter((total) => total.eventCount > 0);
+    return activeTotals.slice(0, 6).map((total) => {
+      const previewEvents = eventMap.get(total.studentKey) ?? [];
+      const latestEvent = previewEvents[0];
+      const details = buildStructuredText([
+        previewEvents.length > 0 ? `\uCD5C\uADFC \uD750\uB984: ${this.buildStarRecentEventSummary(previewEvents, ledger.rules)}` : `\uB204\uC801 \uC774\uBCA4\uD2B8 ${total.eventCount}\uAC74`,
+        `\uD559\uC0DD \uACF5\uAC1C ${formatSignedPoints(total.visibleTotal)} / \uC804\uCCB4 ${formatSignedPoints(total.total)}`,
+        total.hiddenAdjustmentTotal !== 0 ? `\uC120\uC0DD\uB2D8 \uC870\uC815 ${formatSignedPoints(total.hiddenAdjustmentTotal)}` : ""
+      ], "\uD65C\uB3D9 \uD750\uB984 \uD655\uC778");
+      return {
+        title: formatStudentLabel(total.student),
+        meta: previewEvents.length > 0 ? `\uCD5C\uADFC ${previewEvents.length}\uAC74` : `\uD65C\uB3D9 ${total.eventCount}\uAC74`,
+        description: details.text,
+        detailLines: details.lines,
+        tone: latestEvent ? latestEvent.delta < 0 ? "warning" : "positive" : total.hiddenAdjustmentTotal < 0 ? "warning" : void 0,
+        student: total.student
+      };
+    });
+  }
+  mergeTeacherPriorityRows(rows) {
+    const merged = [];
+    const indexByKey = /* @__PURE__ */ new Map();
+    for (const row of rows) {
+      const key = row.student ? this.getStudentLookupKey(row.student) : normalizeLookupText(row.title);
+      if (!key) {
+        merged.push({
+          ...row,
+          detailLines: row.detailLines ? row.detailLines.slice() : void 0
+        });
+        continue;
+      }
+      const existingIndex = indexByKey.get(key);
+      if (existingIndex === void 0) {
+        indexByKey.set(key, merged.length);
+        merged.push({
+          ...row,
+          detailLines: row.detailLines ? row.detailLines.slice() : void 0
+        });
+        continue;
+      }
+      const existing = merged[existingIndex];
+      const detailLines = uniqueTextLines([
+        ...existing.detailLines?.length ? existing.detailLines : existing.description ? [existing.description] : [],
+        ...row.detailLines?.length ? row.detailLines : row.description ? [row.description] : []
+      ]);
+      merged[existingIndex] = {
+        ...existing,
+        meta: joinUniqueText([existing.meta, row.meta], " \xB7 "),
+        description: detailLines.join(" / "),
+        detailLines,
+        tone: existing.tone === "warning" || row.tone === "warning" ? "warning" : existing.tone === "positive" || row.tone === "positive" ? "positive" : existing.tone ?? row.tone
+      };
+    }
+    return merged;
+  }
+  buildTeacherPriorityPreviewLabel(rows) {
+    if (rows.length === 0) {
+      return "\uB300\uC0C1 \uD559\uC0DD";
+    }
+    if (rows.length === 1) {
+      return rows[0].title;
+    }
+    return `${rows[0].title} \uC678 ${rows.length - 1}\uBA85`;
+  }
+  getLoadedAggregateData(sourceState) {
+    return sourceState?.status === "loaded" && sourceState.data ? sourceState.data : null;
+  }
+  getLoadedRosterData(sourceState) {
+    return sourceState?.status === "loaded" && sourceState.data ? sourceState.data : null;
+  }
+  buildMissingSubmissionSnapshot(scopeLabel, classroom, students) {
+    const rosterState = this.studentRosterSource;
+    const classroomLabel = formatClassroomLabel(classroom) || "\uD559\uAE09 \uC815\uBCF4 \uD655\uC778 \uD544\uC694";
+    if (!rosterState) {
+      return {
+        rosterStatus: "disabled",
+        scopeLabel,
+        classroomLabel,
+        rosterCount: 0,
+        submittedCount: 0,
+        missingStudents: [],
+        message: "\uD559\uC0DD \uBA85\uB2E8 \uAC00\uC838\uC624\uAE30 \uB3C4\uC6B0\uBBF8\uC5D0\uC11C CSV\uB97C \uC800\uC7A5\uD558\uAC70\uB098 \uD559\uC0DD \uBA85\uB2E8 JSON\uC744 \uC5F0\uACB0\uD558\uBA74 \uC751\uB2F5\uC774 \uC5C6\uB294 \uD559\uC0DD\uB3C4 \uC790\uB3D9\uC73C\uB85C \uBBF8\uC81C\uCD9C\uB85C \uD45C\uC2DC\uD569\uB2C8\uB2E4."
+      };
+    }
+    if (rosterState.status !== "loaded" || !rosterState.data) {
+      return {
+        rosterStatus: rosterState.status,
+        scopeLabel,
+        classroomLabel,
+        rosterCount: 0,
+        submittedCount: 0,
+        missingStudents: [],
+        message: this.getMissingSubmissionUnavailableMessage(rosterState.status)
+      };
+    }
+    const scopedRoster = this.getScopedRosterStudents(rosterState.data, classroom);
+    if (scopedRoster.length === 0) {
+      return {
+        rosterStatus: "loaded",
+        scopeLabel,
+        classroomLabel,
+        rosterCount: 0,
+        submittedCount: 0,
+        missingStudents: [],
+        message: classroom.trim() ? `${classroomLabel} \uD559\uC0DD \uBA85\uB2E8\uC744 \uC544\uC9C1 \uCC3E\uC9C0 \uBABB\uD588\uC2B5\uB2C8\uB2E4. \uD559\uC0DD \uBA85\uB2E8 JSON\uC758 classroom \uAC12\uC744 \uB2E4\uC2DC \uD655\uC778\uD574 \uC8FC\uC138\uC694.` : "\uD559\uC0DD \uBA85\uB2E8\uC740 \uC77D\uC5C8\uC9C0\uB9CC \uC774 \uD654\uBA74\uACFC \uC5F0\uACB0\uD560 \uD559\uAE09 \uC815\uBCF4\uB97C \uC544\uC9C1 \uCC3E\uC9C0 \uBABB\uD588\uC2B5\uB2C8\uB2E4. \uD559\uAE09 \uC9D1\uACC4\uC640 \uBA85\uB2E8\uC758 classroom \uAC12\uC744 \uB2E4\uC2DC \uD655\uC778\uD574 \uC8FC\uC138\uC694."
+      };
+    }
+    const responseKeySet = new Set(
+      students.map((student) => this.getStudentLookupKey(student)).filter((value) => value !== null)
+    );
+    const responseNumberNameKeySet = new Set(
+      students.map((student) => getStudentNumberNameKey(student)).filter((value) => value !== null)
+    );
+    const allowLooseMatch = normalizeStudentClassroomValue(classroom).length > 0;
+    const missingStudents = scopedRoster.filter((student) => {
+      const fullKey = this.getStudentLookupKey(student);
+      if (fullKey && responseKeySet.has(fullKey)) {
+        return false;
+      }
+      const numberNameKey = getStudentNumberNameKey(student);
+      return !(allowLooseMatch && numberNameKey && responseNumberNameKeySet.has(numberNameKey));
+    });
+    return {
+      rosterStatus: "loaded",
+      scopeLabel,
+      classroomLabel,
+      rosterCount: scopedRoster.length,
+      submittedCount: scopedRoster.length - missingStudents.length,
+      missingStudents,
+      message: missingStudents.length > 0 ? `\uBA85\uB2E8 ${scopedRoster.length}\uBA85 \uC911 ${scopedRoster.length - missingStudents.length}\uBA85 \uC81C\uCD9C` : `${scopeLabel} \uAE30\uC900\uC73C\uB85C\uB294 \uBAA8\uB450 \uC81C\uCD9C\uD588\uC2B5\uB2C8\uB2E4.`
+    };
+  }
+  getScopedRosterStudents(roster, classroom) {
+    const targetClassroom = normalizeStudentClassroomValue(classroom);
+    if (!targetClassroom) {
+      return roster.students.slice();
+    }
+    const matchingStudents = roster.students.filter(
+      (student) => normalizeStudentClassroomValue(student.classroom) === targetClassroom
+    );
+    if (matchingStudents.length > 0) {
+      return matchingStudents;
+    }
+    const uniqueClassrooms = roster.students.map((student) => normalizeStudentClassroomValue(student.classroom)).filter((value, index, array) => value.length > 0 && array.indexOf(value) === index);
+    return uniqueClassrooms.length <= 1 ? roster.students.slice() : [];
+  }
+  getMissingSubmissionUnavailableMessage(status) {
+    switch (status) {
+      case "disabled":
+        return "\uD559\uC0DD \uBA85\uB2E8 \uAC00\uC838\uC624\uAE30 \uB3C4\uC6B0\uBBF8\uC5D0\uC11C CSV\uB97C \uC800\uC7A5\uD558\uAC70\uB098 \uD559\uC0DD \uBA85\uB2E8 JSON\uC744 \uC5F0\uACB0\uD558\uBA74 \uC751\uB2F5\uC774 \uC5C6\uB294 \uD559\uC0DD\uB3C4 \uC790\uB3D9\uC73C\uB85C \uBBF8\uC81C\uCD9C\uB85C \uD45C\uC2DC\uD569\uB2C8\uB2E4.";
+      case "missing":
+        return "\uD559\uC0DD \uBA85\uB2E8 JSON \uD30C\uC77C \uACBD\uB85C\uB97C \uB2E4\uC2DC \uD655\uC778\uD574 \uC8FC\uC138\uC694. \uBA85\uB2E8\uC774 \uC5C6\uC5B4\uB3C4 \uB2E4\uB978 \uD654\uBA74\uC740 \uADF8\uB300\uB85C \uC0AC\uC6A9\uD560 \uC218 \uC788\uC2B5\uB2C8\uB2E4.";
+      case "invalid":
+        return '\uD559\uC0DD \uBA85\uB2E8 JSON \uD615\uC2DD\uC744 \uB2E4\uC2DC \uD655\uC778\uD574 \uC8FC\uC138\uC694. `type: "student-roster"` \uC640 `students` \uBAA9\uB85D\uC774 \uD544\uC694\uD569\uB2C8\uB2E4. \uD544\uC694\uD558\uBA74 CSV \uB3C4\uC6B0\uBBF8\uB85C \uB2E4\uC2DC \uC800\uC7A5\uD574\uB3C4 \uB429\uB2C8\uB2E4.';
+      default:
+        return "\uD559\uC0DD \uBA85\uB2E8 JSON\uC744 \uC77D\uB294 \uC911 \uBB38\uC81C\uAC00 \uC0DD\uACBC\uC2B5\uB2C8\uB2E4. \uD30C\uC77C\uC744 \uB2E4\uC2DC \uC800\uC7A5\uD55C \uB4A4 \uD55C \uBC88 \uB354 \uD655\uC778\uD574 \uC8FC\uC138\uC694.";
+    }
+  }
+  buildMissingSubmissionRows(snapshot) {
+    return this.sortItemsByStudentPreference(snapshot.missingStudents, {
+      getStudent: (student) => student,
+      getRecentRank: (_student, index) => index
+    }).map((student) => {
+      const details = buildStructuredText([
+        `${snapshot.scopeLabel} \uC751\uB2F5\uC774 \uC544\uC9C1 \uBCF4\uC774\uC9C0 \uC54A\uC2B5\uB2C8\uB2E4.`,
+        student.note ? `\uBA54\uBAA8: ${student.note}` : "",
+        student.studentId ? `\uD559\uC0DD ID: ${student.studentId}` : ""
+      ], "\uD604\uC7AC \uC751\uB2F5 \uC5C6\uC74C");
+      return {
+        title: formatStudentLabel(student),
+        meta: [
+          snapshot.scopeLabel,
+          student.studentId ? `ID ${student.studentId}` : ""
+        ].filter(Boolean).join(" \xB7 "),
+        description: details.text,
+        detailLines: details.lines,
+        tone: "warning",
+        student
+      };
+    });
+  }
+  getStudentSortMode() {
+    return this.getDashboardPreferences().defaultStudentSort;
+  }
+  sortItemsByStudentPreference(items, config) {
+    const mode = this.getStudentSortMode();
+    return items.map((item, index) => ({ item, index })).sort((left, right) => {
+      const studentDiff = this.compareStudentsBySortMode(
+        config.getStudent(left.item),
+        config.getStudent(right.item),
+        mode
+      );
+      if (studentDiff !== 0) {
+        if (mode === "number") {
+          return studentDiff;
+        }
+      }
+      if (mode === "risk" && config.getRiskScore) {
+        const riskDiff = config.getRiskScore(right.item, right.index) - config.getRiskScore(left.item, left.index);
+        if (riskDiff !== 0) {
+          return riskDiff;
+        }
+      }
+      if (mode === "praise" && config.getPraiseScore) {
+        const praiseDiff = config.getPraiseScore(right.item, right.index) - config.getPraiseScore(left.item, left.index);
+        if (praiseDiff !== 0) {
+          return praiseDiff;
+        }
+      }
+      if (mode === "recent" && config.getRecentRank) {
+        const recentDiff = config.getRecentRank(left.item, left.index) - config.getRecentRank(right.item, right.index);
+        if (recentDiff !== 0) {
+          return recentDiff;
+        }
+      }
+      const fallbackNumberDiff = this.compareStudentsBySortMode(
+        config.getStudent(left.item),
+        config.getStudent(right.item),
+        "number"
+      );
+      if (fallbackNumberDiff !== 0) {
+        return fallbackNumberDiff;
+      }
+      return left.index - right.index;
+    }).map(({ item }) => item);
+  }
+  compareStudentsBySortMode(left, right, mode) {
+    if (mode === "number") {
+      const numberDiff = parseLeadingNumber(left.number) - parseLeadingNumber(right.number);
+      if (numberDiff !== 0) {
+        return numberDiff;
+      }
+    }
+    const classDiff = normalizeLookupText(left.classroom).localeCompare(normalizeLookupText(right.classroom), "ko-KR");
+    if (classDiff !== 0) {
+      return classDiff;
+    }
+    const nameDiff = left.name.localeCompare(right.name, "ko-KR");
+    if (nameDiff !== 0) {
+      return nameDiff;
+    }
+    return left.number.localeCompare(right.number, "ko-KR");
+  }
+  getClassSupportRiskScore(student, index) {
+    return (student.reason ? 4 : 0) + (student.teacherNote ? 2 : 0) + (/미달|불안|걱정/.test(student.mood + student.yesterdayAchievement) ? 3 : 0) + Math.max(0, 50 - index);
+  }
+  getPraiseCandidateScore(student, index, response) {
+    return (student.reason ? 4 : 0) + (student.mentionedPeer ? 2 : 0) + (response?.helpedFriend ? 2 : 0) + Math.max(0, 50 - index);
+  }
+  getClassResponseRiskScore(student) {
+    let score = 0;
+    if (/불안|피곤|걱정|힘듦/.test(student.emotionLabel + student.mood)) {
+      score += 4;
+    }
+    if (/미달/.test(student.goalLabel + student.yesterdayAchievement)) {
+      score += 4;
+    }
+    if (/부분/.test(student.goalLabel + student.yesterdayAchievement)) {
+      score += 2;
+    }
+    if (student.teacherMessage) {
+      score += 1;
+    }
+    return score;
+  }
+  getClassResponsePraiseScore(student) {
+    let score = 0;
+    if (student.helpedFriend) {
+      score += 4;
+    }
+    if (/달성/.test(student.goalLabel + student.yesterdayAchievement)) {
+      score += 3;
+    }
+    if (/안정|좋음/.test(student.emotionLabel + student.mood)) {
+      score += 1;
+    }
+    return score;
+  }
+  getLessonResponseRiskScore(student) {
+    return student.incorrectCount * 3 + (student.assignmentStatus.includes("\uBBF8\uC644\uB8CC") ? 5 : 0) + (student.assignmentStatus.includes("\uBD80\uBD84") ? 2 : 0) + Math.max(0, 5 - this.getLessonFollowUpPriority(student.followUp));
+  }
+  getLessonResponsePraiseScore(student) {
+    return student.correctCount * 2 - student.incorrectCount + (student.assignmentStatus.includes("\uC644\uB8CC") ? 3 : 0);
+  }
+  getLessonResultRiskScore(result) {
+    return result.incorrectCount * 3 + (result.assignmentStatus.includes("\uBBF8\uC644\uB8CC") ? 5 : 0) + Math.max(0, 5 - this.getLessonFollowUpPriority(result.followUp));
+  }
+  getLessonResultPraiseScore(result) {
+    return result.correctCount * 2 - result.incorrectCount + (result.assignmentStatus.includes("\uC644\uB8CC") ? 3 : 0) + (this.normalizeLessonFollowUpValue(result.followUp) ? 0 : 1);
+  }
   renderTeacherAdvancedSection(parent, teacherData) {
     const details = parent.createEl("details", {
       cls: "classpage-card classpage-advanced"
@@ -1354,6 +2831,7 @@ var ClassPageView = class extends import_obsidian2.ItemView {
         `\uC218\uC9D1: Google Form`,
         `\uC800\uC7A5: Google Sheets`,
         `\uC9D1\uACC4: Apps Script \uB610\uB294 \uC678\uBD80 \uC790\uB3D9\uD654`,
+        `\uBE44\uAD50 \uAE30\uC900\uD45C: \uD559\uC0DD \uBA85\uB2E8 JSON(\uC120\uD0DD)`,
         `\uD45C\uC2DC: classpage`
       ]
     );
@@ -1381,6 +2859,14 @@ var ClassPageView = class extends import_obsidian2.ItemView {
       "\uBCC4\uC810\uBAA8\uB4DC \uC9D1\uACC4 \uD30C\uC77C",
       "\uD559\uAE09\uC6A9/\uC218\uC5C5\uC6A9 \uC751\uB2F5 -> Apps Script \uBCC4\uC810 \uC774\uBCA4\uD2B8 \uC9D1\uACC4 -> star-ledger.json",
       teacherData?.starLedger ?? null
+    );
+    this.renderStudentRosterSourceCard(
+      sourceGrid,
+      teacherData?.roster ?? null
+    );
+    this.renderStudentPhotoSourceCard(
+      sourceGrid,
+      teacherData?.studentPhotoMap ?? null
     );
   }
   renderListCard(parent, title, items) {
@@ -1515,20 +3001,126 @@ var ClassPageView = class extends import_obsidian2.ItemView {
       this.renderMetaRow(metaList, "\uC9D1\uACC4 \uC124\uBA85", sourceState.data.source.aggregatorNote);
     }
   }
+  renderStudentRosterSourceCard(parent, sourceState) {
+    const card = parent.createDiv({ cls: "classpage-card classpage-source-card" });
+    const cardHeader = card.createDiv({ cls: "classpage-source-card__header" });
+    cardHeader.createEl("h3", {
+      cls: "classpage-card__title",
+      text: "\uD559\uC0DD \uBA85\uB2E8 \uD30C\uC77C"
+    });
+    cardHeader.createEl("span", {
+      cls: `classpage-source-status classpage-source-status--${sourceState?.status ?? "disabled"}`,
+      text: this.getStudentRosterSourceStatusLabel(sourceState?.status ?? "disabled")
+    });
+    card.createEl("p", {
+      cls: "classpage-source-card__flow",
+      text: "\uD559\uC0DD \uBA85\uB2E8 JSON -> classpage -> \uD559\uAE09/\uC218\uC5C5 \uC751\uB2F5 \uBE44\uAD50 -> \uBBF8\uC81C\uCD9C \uD559\uC0DD \uD45C\uC2DC"
+    });
+    card.createEl("p", {
+      cls: "classpage-source-card__path",
+      text: `\uACBD\uB85C: ${sourceState?.path || "\uC124\uC815\uB418\uC9C0 \uC54A\uC74C"}`
+    });
+    if (!sourceState || sourceState.status !== "loaded" || !sourceState.data) {
+      card.createEl("p", {
+        cls: "classpage-source-card__message",
+        text: sourceState?.message || "\uD559\uC0DD \uBA85\uB2E8\uC744 \uC544\uC9C1 \uBD88\uB7EC\uC624\uC9C0 \uC54A\uC558\uC2B5\uB2C8\uB2E4."
+      });
+      return;
+    }
+    const metaList = card.createEl("dl", { cls: "classpage-meta-list" });
+    this.renderMetaRow(metaList, "\uD559\uC0DD \uC218", `${sourceState.data.students.length}\uBA85`);
+    if (sourceState.data.defaultClassroom) {
+      this.renderMetaRow(
+        metaList,
+        "\uAE30\uBCF8 \uD559\uAE09",
+        formatClassroomLabel(sourceState.data.defaultClassroom)
+      );
+    }
+    if (sourceState.data.sourceLabel) {
+      this.renderMetaRow(metaList, "\uBA85\uB2E8 \uC124\uBA85", sourceState.data.sourceLabel);
+    }
+    if (sourceState.data.generatedAt) {
+      this.renderMetaRow(metaList, "\uAC31\uC2E0 \uC2DC\uAC01", formatDateLabel(sourceState.data.generatedAt));
+    }
+    this.renderMetaRow(metaList, "\uBE44\uAD50 \uAE30\uC900", "classroom + number + name");
+  }
+  renderStudentPhotoSourceCard(parent, sourceState) {
+    const card = parent.createDiv({ cls: "classpage-card classpage-source-card" });
+    const cardHeader = card.createDiv({ cls: "classpage-source-card__header" });
+    cardHeader.createEl("h3", {
+      cls: "classpage-card__title",
+      text: "\uD559\uC0DD \uC0AC\uC9C4 \uB9E4\uD551 \uD30C\uC77C"
+    });
+    cardHeader.createEl("span", {
+      cls: `classpage-source-status classpage-source-status--${sourceState?.status ?? "disabled"}`,
+      text: this.getStudentPhotoSourceStatusLabel(sourceState?.status ?? "disabled")
+    });
+    card.createEl("p", {
+      cls: "classpage-source-card__flow",
+      text: "\uC120\uC0DD\uB2D8 \uD654\uBA74 \uD559\uC0DD \uC2DD\uBCC4\uAC12(classroom|number|name) -> \uC120\uD0DD \uD559\uC0DD \uC0AC\uC9C4 \uB9E4\uD551 JSON -> \uBCFC\uD2B8 \uC548 \uC774\uBBF8\uC9C0 \uD30C\uC77C"
+    });
+    card.createEl("p", {
+      cls: "classpage-source-card__path",
+      text: `\uACBD\uB85C: ${sourceState?.path || "\uC124\uC815\uB418\uC9C0 \uC54A\uC74C"}`
+    });
+    if (!sourceState || sourceState.status !== "loaded" || !sourceState.data) {
+      card.createEl("p", {
+        cls: "classpage-source-card__message",
+        text: sourceState?.message || "\uD559\uC0DD \uC0AC\uC9C4 \uB9E4\uD551\uC744 \uC544\uC9C1 \uBD88\uB7EC\uC624\uC9C0 \uC54A\uC558\uC2B5\uB2C8\uB2E4."
+      });
+      return;
+    }
+    const metaList = card.createEl("dl", { cls: "classpage-meta-list" });
+    this.renderMetaRow(metaList, "\uB9E4\uD551 \uC218", `${Object.keys(sourceState.data.entries).length}\uBA85`);
+    this.renderMetaRow(metaList, "\uD0A4 \uD615\uC2DD", "classroom|number|name");
+    this.renderMetaRow(metaList, "\uACBD\uB85C \uAE30\uC900", "\uBCFC\uD2B8 \uACBD\uB85C \uB610\uB294 ./\uC0C1\uB300 \uACBD\uB85C");
+  }
   renderClassSummaryCard(parent, sourceState, emptyMessage) {
     if (!sourceState || sourceState.status !== "loaded" || !sourceState.data) {
       this.renderEmptyAggregateCard(parent, emptyMessage, sourceState);
       return;
     }
     const summary = sourceState.data;
+    const preferences = this.getDashboardPreferences();
     const responseMap = this.buildStudentResponseMap(summary.studentResponses);
     const hasStudentSnapshots = summary.studentResponses.length > 0;
+    const missingSnapshot = this.buildMissingSubmissionSnapshot(
+      "\uD559\uAE09\uC6A9 \uD3FC",
+      summary.classroom,
+      summary.studentResponses.map((item) => item.student)
+    );
+    const sortedResponses = this.sortItemsByStudentPreference(summary.studentResponses, {
+      getStudent: (student) => student.student,
+      getRiskScore: (student) => this.getClassResponseRiskScore(student),
+      getPraiseScore: (student) => this.getClassResponsePraiseScore(student),
+      getRecentRank: (_student, index) => index
+    });
+    const sortedSupportStudents = this.sortItemsByStudentPreference(summary.supportStudents, {
+      getStudent: (student) => student.student,
+      getRiskScore: (student, index) => this.getClassSupportRiskScore(student, index),
+      getRecentRank: (_student, index) => index
+    });
+    const sortedPraiseCandidates = this.sortItemsByStudentPreference(summary.praiseCandidates, {
+      getStudent: (student) => student.student,
+      getPraiseScore: (student, index) => this.getPraiseCandidateScore(
+        student,
+        index,
+        this.findClassResponseByStudent(responseMap, student.student)
+      ),
+      getRecentRank: (_student, index) => index
+    });
     const stats = parent.createDiv({ cls: "classpage-stat-grid" });
     this.renderStatCard(
       stats,
       "\uC751\uB2F5 \uC218",
       `${summary.responseCount}`,
       this.buildResponseCountDescription(summary)
+    );
+    this.renderStatCard(
+      stats,
+      "\uBBF8\uC81C\uCD9C \uD559\uC0DD",
+      missingSnapshot.rosterStatus === "loaded" ? `${missingSnapshot.missingStudents.length}\uBA85` : missingSnapshot.rosterStatus === "disabled" ? "\uC5F0\uACB0 \uC804" : "\uD655\uC778 \uD544\uC694",
+      missingSnapshot.message
     );
     this.renderStatCard(
       stats,
@@ -1548,6 +3140,15 @@ var ClassPageView = class extends import_obsidian2.ItemView {
       `${summary.praiseCandidates.length}`,
       "\uCE5C\uAD6C \uB3C4\uC6C0/\uACA9\uB824 \uD6C4\uBCF4"
     );
+    if (preferences.highlightMissingSubmissions) {
+      this.renderDetailRowsCard(
+        parent,
+        "\uC544\uC9C1 \uC81C\uCD9C\uD558\uC9C0 \uC54A\uC740 \uD559\uC0DD",
+        this.buildMissingSubmissionRows(missingSnapshot),
+        missingSnapshot.message,
+        true
+      );
+    }
     const grid = parent.createDiv({ cls: "classpage-summary-grid" });
     this.renderGroupedDrilldownCard(
       grid,
@@ -1557,7 +3158,7 @@ var ClassPageView = class extends import_obsidian2.ItemView {
         meta: `${item.count}\uBA85`,
         description: item.note || "\uC815\uC11C \uC0C1\uD0DC \uBD84\uD3EC",
         emptyMessage: hasStudentSnapshots ? "\uD574\uB2F9 \uC0C1\uD0DC \uD559\uC0DD\uC774 \uC5C6\uC2B5\uB2C8\uB2E4." : "\uD559\uC0DD\uBCC4 \uC751\uB2F5 \uC2A4\uB0C5\uC0F7\uC774 \uC5C6\uC5B4 drill-down\uC744 \uC5F4 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.",
-        items: summary.studentResponses.filter((student) => student.emotionLabel === item.label).map((student) => this.buildClassResponseDrilldownItem(student))
+        items: sortedResponses.filter((student) => student.emotionLabel === item.label).map((student) => this.buildClassResponseDrilldownItem(student))
       })),
       "\uC815\uC11C \uBD84\uD3EC \uB370\uC774\uD130\uAC00 \uC5C6\uC2B5\uB2C8\uB2E4."
     );
@@ -1569,32 +3170,52 @@ var ClassPageView = class extends import_obsidian2.ItemView {
         meta: `${item.count}\uBA85`,
         description: item.note || "\uBAA9\uD45C \uB2EC\uC131 \uBD84\uD3EC",
         emptyMessage: hasStudentSnapshots ? "\uD574\uB2F9 \uB2EC\uC131\uB3C4 \uD559\uC0DD\uC774 \uC5C6\uC2B5\uB2C8\uB2E4." : "\uD559\uC0DD\uBCC4 \uC751\uB2F5 \uC2A4\uB0C5\uC0F7\uC774 \uC5C6\uC5B4 drill-down\uC744 \uC5F4 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.",
-        items: summary.studentResponses.filter((student) => student.goalLabel === item.label).map((student) => this.buildClassResponseDrilldownItem(student))
+        items: sortedResponses.filter((student) => student.goalLabel === item.label).map((student) => this.buildClassResponseDrilldownItem(student))
       })),
       "\uBAA9\uD45C \uBD84\uD3EC \uB370\uC774\uD130\uAC00 \uC5C6\uC2B5\uB2C8\uB2E4."
     );
-    this.renderStudentDrilldownCard(
-      grid,
-      "\uB3C4\uC6C0\uC774 \uD544\uC694\uD55C \uD559\uC0DD",
-      summary.supportStudents.map(
-        (student) => this.buildClassSupportDrilldownItem(
-          student,
-          this.findClassResponseByStudent(responseMap, student.student)
-        )
-      ),
-      "\uD604\uC7AC \uD45C\uC2DC\uD560 \uD559\uC0DD\uC774 \uC5C6\uC2B5\uB2C8\uB2E4."
-    );
-    this.renderStudentDrilldownCard(
-      grid,
-      "\uCE6D\uCC2C/\uACA9\uB824 \uD6C4\uBCF4",
-      summary.praiseCandidates.map(
-        (student) => this.buildPraiseCandidateDrilldownItem(
-          student,
-          this.findClassResponseByStudent(responseMap, student.student)
-        )
-      ),
-      "\uD604\uC7AC \uD45C\uC2DC\uD560 \uD559\uC0DD\uC774 \uC5C6\uC2B5\uB2C8\uB2E4."
-    );
+    const renderSupportCard = () => {
+      this.renderStudentDrilldownCard(
+        grid,
+        "\uB3C4\uC6C0\uC774 \uD544\uC694\uD55C \uD559\uC0DD",
+        sortedSupportStudents.map(
+          (student) => this.buildClassSupportDrilldownItem(
+            student,
+            this.findClassResponseByStudent(responseMap, student.student)
+          )
+        ),
+        "\uD604\uC7AC \uD45C\uC2DC\uD560 \uD559\uC0DD\uC774 \uC5C6\uC2B5\uB2C8\uB2E4."
+      );
+    };
+    const renderPraiseCard = () => {
+      this.renderStudentDrilldownCard(
+        grid,
+        "\uCE6D\uCC2C/\uACA9\uB824 \uD6C4\uBCF4",
+        sortedPraiseCandidates.map(
+          (student) => this.buildPraiseCandidateDrilldownItem(
+            student,
+            this.findClassResponseByStudent(responseMap, student.student)
+          )
+        ),
+        "\uD604\uC7AC \uD45C\uC2DC\uD560 \uD559\uC0DD\uC774 \uC5C6\uC2B5\uB2C8\uB2E4."
+      );
+    };
+    if (this.shouldShowPraiseBeforeRisk()) {
+      renderPraiseCard();
+      renderSupportCard();
+    } else {
+      renderSupportCard();
+      renderPraiseCard();
+    }
+    if (!preferences.highlightMissingSubmissions) {
+      this.renderDetailRowsCard(
+        parent,
+        "\uC544\uC9C1 \uC81C\uCD9C\uD558\uC9C0 \uC54A\uC740 \uD559\uC0DD",
+        this.buildMissingSubmissionRows(missingSnapshot),
+        missingSnapshot.message,
+        true
+      );
+    }
   }
   renderLessonSummaryCard(parent, sourceState, emptyMessage) {
     if (!sourceState || sourceState.status !== "loaded" || !sourceState.data) {
@@ -1602,6 +3223,7 @@ var ClassPageView = class extends import_obsidian2.ItemView {
       return;
     }
     const summary = sourceState.data;
+    const preferences = this.getDashboardPreferences();
     const explorer = this.getLessonExplorerState(summary);
     const {
       availableSubjects,
@@ -1627,6 +3249,26 @@ var ClassPageView = class extends import_obsidian2.ItemView {
     const responseMap = this.buildLessonResponseMap(selectedGroup.studentResponses);
     const hasStudentSnapshots = selectedGroup.studentResponses.length > 0;
     const urgentFollowUpItems = this.buildLessonFollowUpDrilldownItems(selectedGroup, responseMap);
+    const sortedResponses = this.sortItemsByStudentPreference(selectedGroup.studentResponses, {
+      getStudent: (student) => student.student,
+      getRiskScore: (student) => this.getLessonResponseRiskScore(student),
+      getPraiseScore: (student) => this.getLessonResponsePraiseScore(student),
+      getRecentRank: (_student, index) => index
+    });
+    const sortedStudentResults = this.sortItemsByStudentPreference(
+      this.getSortedLessonStudentResults(selectedGroup),
+      {
+        getStudent: (student) => student.student,
+        getRiskScore: (student) => this.getLessonResultRiskScore(student),
+        getPraiseScore: (student) => this.getLessonResultPraiseScore(student),
+        getRecentRank: (_student, index) => index
+      }
+    );
+    const missingSnapshot = this.buildMissingSubmissionSnapshot(
+      "\uD604\uC7AC \uC120\uD0DD\uD55C \uC218\uC5C5",
+      selectedGroup.classroom || summary.classroom,
+      selectedGroup.studentResponses.map((item) => item.student)
+    );
     const lessonScopeDescription = this.buildLessonScopeDescription(explorer, {
       includeSubjectCount: false,
       includeCurrentGroup: false
@@ -1655,6 +3297,12 @@ var ClassPageView = class extends import_obsidian2.ItemView {
     );
     this.renderStatCard(
       stats,
+      "\uBBF8\uC81C\uCD9C \uD559\uC0DD",
+      missingSnapshot.rosterStatus === "loaded" ? `${missingSnapshot.missingStudents.length}\uBA85` : missingSnapshot.rosterStatus === "disabled" ? "\uC5F0\uACB0 \uC804" : "\uD655\uC778 \uD544\uC694",
+      missingSnapshot.message
+    );
+    this.renderStatCard(
+      stats,
       "\uD3C9\uADE0 \uC815\uB2F5",
       selectedGroup.overview.averageCorrectCount.toFixed(1),
       `${selectedSubject.subject || selectedGroup.subject || "\uC218\uC5C5"} \uAE30\uC900`
@@ -1671,13 +3319,31 @@ var ClassPageView = class extends import_obsidian2.ItemView {
       selectedGroup.overview.assignmentCompletionLabel || "\uBBF8\uBD84\uB958",
       "\uAC00\uC7A5 \uB9CE\uC774 \uD655\uC778\uB41C \uC0C1\uD0DC"
     );
-    this.renderStudentDrilldownCard(
-      parent,
-      "\uB2E4\uC74C \uD53C\uB4DC\uBC31 \uB300\uC0C1",
-      urgentFollowUpItems,
-      "\uD604\uC7AC \uBC14\uB85C \uD655\uC778\uD560 \uD559\uC0DD\uC774 \uC5C6\uC2B5\uB2C8\uB2E4.",
-      true
-    );
+    const renderMissingSubmissionCard = () => {
+      this.renderDetailRowsCard(
+        parent,
+        "\uC774\uBC88 \uC218\uC5C5 \uC544\uC9C1 \uC81C\uCD9C\uD558\uC9C0 \uC54A\uC740 \uD559\uC0DD",
+        this.buildMissingSubmissionRows(missingSnapshot),
+        missingSnapshot.message,
+        true
+      );
+    };
+    const renderLessonFollowUpCard = () => {
+      this.renderStudentDrilldownCard(
+        parent,
+        "\uB2E4\uC74C \uD53C\uB4DC\uBC31 \uB300\uC0C1",
+        urgentFollowUpItems,
+        "\uD604\uC7AC \uBC14\uB85C \uD655\uC778\uD560 \uD559\uC0DD\uC774 \uC5C6\uC2B5\uB2C8\uB2E4.",
+        true
+      );
+    };
+    if (preferences.preset === "submission-focus" || preferences.highlightMissingSubmissions && !preferences.highlightAtRiskStudents) {
+      renderMissingSubmissionCard();
+      renderLessonFollowUpCard();
+    } else {
+      renderLessonFollowUpCard();
+      renderMissingSubmissionCard();
+    }
     const grid = parent.createDiv({ cls: "classpage-summary-grid" });
     this.renderDetailRowsCard(
       grid,
@@ -1694,7 +3360,7 @@ var ClassPageView = class extends import_obsidian2.ItemView {
         description: [item.averageUnderstanding, item.note].filter(Boolean).join(" / "),
         tone: item.count > 0 ? "warning" : void 0,
         emptyMessage: hasStudentSnapshots ? "\uD574\uB2F9 \uAC1C\uB150\uC5D0\uC11C \uB0AE\uC740 \uC774\uD574 \uD559\uC0DD\uC774 \uC5C6\uC2B5\uB2C8\uB2E4." : "\uD559\uC0DD\uBCC4 \uC751\uB2F5 \uC2A4\uB0C5\uC0F7\uC774 \uC5C6\uC5B4 drill-down\uC744 \uC5F4 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.",
-        items: selectedGroup.studentResponses.filter((student) => this.hasLowConcept(student, item.concept)).map((student) => this.buildLessonStudentDrilldownItem(student))
+        items: sortedResponses.filter((student) => this.hasLowConcept(student, item.concept)).map((student) => this.buildLessonStudentDrilldownItem(student))
       })),
       "\uC5B4\uB824\uC6CC\uD55C \uAC1C\uB150 \uB370\uC774\uD130\uAC00 \uC5C6\uC2B5\uB2C8\uB2E4."
     );
@@ -1706,14 +3372,14 @@ var ClassPageView = class extends import_obsidian2.ItemView {
         meta: `${item.count}\uBA85`,
         description: item.note || "\uBCF5\uC2B5/\uC218\uD589 \uC0C1\uD0DC",
         emptyMessage: hasStudentSnapshots ? "\uD574\uB2F9 \uBCF5\uC2B5/\uC218\uD589 \uC0C1\uD0DC \uD559\uC0DD\uC774 \uC5C6\uC2B5\uB2C8\uB2E4." : "\uD559\uC0DD\uBCC4 \uC751\uB2F5 \uC2A4\uB0C5\uC0F7\uC774 \uC5C6\uC5B4 drill-down\uC744 \uC5F4 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.",
-        items: selectedGroup.studentResponses.filter((student) => student.assignmentStatus === item.label).map((student) => this.buildLessonStudentDrilldownItem(student))
+        items: sortedResponses.filter((student) => student.assignmentStatus === item.label).map((student) => this.buildLessonStudentDrilldownItem(student))
       })),
       "\uBCF5\uC2B5/\uC218\uD589 \uC9D1\uACC4\uAC00 \uC5C6\uC2B5\uB2C8\uB2E4."
     );
     this.renderStudentDrilldownCard(
       parent,
       "\uD559\uC0DD\uBCC4 \uACB0\uACFC\uC640 \uD6C4\uC18D \uC9C0\uB3C4",
-      this.getSortedLessonStudentResults(selectedGroup).map(
+      sortedStudentResults.map(
         (result) => this.buildStudentResultDrilldownItem(
           result,
           this.findLessonResponseByStudent(responseMap, result.student)
@@ -2287,7 +3953,9 @@ var ClassPageView = class extends import_obsidian2.ItemView {
       item.title,
       item.meta,
       item.summary,
-      "classpage-student-drilldown__summary-text"
+      "classpage-student-drilldown__summary-text",
+      item.summaryLines,
+      item.student
     );
     if (item.fields.length === 0) {
       details.createEl("p", {
@@ -2296,13 +3964,25 @@ var ClassPageView = class extends import_obsidian2.ItemView {
       });
       return;
     }
-    const fieldList = details.createEl("dl", { cls: "classpage-drilldown-fields" });
+    const fieldList = details.createDiv({ cls: "classpage-drilldown-fields" });
     for (const field of item.fields) {
-      this.renderMetaRow(fieldList, field.label, field.value);
+      const fieldRow = fieldList.createDiv({ cls: "classpage-drilldown-field" });
+      fieldRow.createEl("span", {
+        cls: "classpage-drilldown-field__label",
+        text: field.label
+      });
+      fieldRow.createEl("p", {
+        cls: "classpage-drilldown-field__value",
+        text: field.value
+      });
     }
   }
-  renderDrilldownSummary(parent, title, meta, description, textClass) {
-    const text = parent.createDiv({ cls: textClass });
+  renderDrilldownSummary(parent, title, meta, description, textClass, descriptionLines, student) {
+    const content = parent.createDiv({ cls: "classpage-student-summary__content" });
+    if (student) {
+      this.renderStudentAvatar(content, student);
+    }
+    const text = content.createDiv({ cls: `${textClass} classpage-identity-text` });
     const header = text.createDiv({ cls: "classpage-detail-list__header" });
     header.createEl("strong", {
       cls: "classpage-detail-list__title",
@@ -2314,12 +3994,11 @@ var ClassPageView = class extends import_obsidian2.ItemView {
         text: meta
       });
     }
-    if (description) {
-      text.createEl("p", {
-        cls: "classpage-detail-list__description",
-        text: description
-      });
-    }
+    this.renderStructuredText(
+      text,
+      descriptionLines?.length ? descriptionLines : description ? [description] : [],
+      "classpage-detail-list__description"
+    );
   }
   renderDetailRowsCard(parent, title, rows, emptyMessage, isWide = false) {
     const classes = ["classpage-card", "classpage-detail-card"];
@@ -2344,7 +4023,12 @@ var ClassPageView = class extends import_obsidian2.ItemView {
         cls: `classpage-detail-list__item${row.tone ? ` is-${row.tone}` : ""}`
       });
       const itemHeader = item.createDiv({ cls: "classpage-detail-list__header" });
-      itemHeader.createEl("strong", {
+      const titleGroup = itemHeader.createDiv({ cls: "classpage-detail-list__title-group" });
+      if (row.student) {
+        this.renderStudentAvatar(titleGroup, row.student, "small");
+      }
+      const titleWrap = titleGroup.createDiv({ cls: "classpage-detail-list__title-wrap" });
+      titleWrap.createEl("strong", {
         cls: "classpage-detail-list__title",
         text: row.title
       });
@@ -2354,13 +4038,113 @@ var ClassPageView = class extends import_obsidian2.ItemView {
           text: row.meta
         });
       }
-      if (row.description) {
-        item.createEl("p", {
-          cls: "classpage-detail-list__description",
-          text: row.description
-        });
-      }
+      this.renderStructuredText(
+        item,
+        row.detailLines?.length ? row.detailLines : row.description ? [row.description] : [],
+        "classpage-detail-list__description"
+      );
     }
+  }
+  renderStructuredText(parent, lines, paragraphClass) {
+    const normalizedLines = compactTextLines(lines);
+    if (normalizedLines.length === 0) {
+      return;
+    }
+    if (normalizedLines.length === 1) {
+      parent.createEl("p", {
+        cls: paragraphClass,
+        text: normalizedLines[0]
+      });
+      return;
+    }
+    const stack = parent.createDiv({ cls: "classpage-detail-list__segments" });
+    for (const line of normalizedLines) {
+      stack.createEl("p", {
+        cls: "classpage-detail-list__segment",
+        text: line
+      });
+    }
+  }
+  renderStudentAvatar(parent, student, size = "default") {
+    const avatar = parent.createDiv({
+      cls: [
+        "classpage-student-avatar",
+        size === "small" ? "classpage-student-avatar--small" : ""
+      ].filter(Boolean).join(" ")
+    });
+    avatar.createEl("span", {
+      cls: "classpage-student-avatar__fallback",
+      text: this.getStudentAvatarFallbackText(student)
+    });
+    const photo = this.resolveStudentPhoto(student);
+    if (!photo) {
+      return;
+    }
+    const image = avatar.createEl("img", {
+      cls: "classpage-student-avatar__image",
+      attr: {
+        alt: `${formatStudentLabel(student)} \uC0AC\uC9C4`,
+        loading: "lazy"
+      }
+    });
+    image.src = photo.src;
+    image.addEventListener("load", () => {
+      avatar.addClass("has-image");
+    });
+    image.addEventListener("error", () => {
+      image.remove();
+      avatar.removeClass("has-image");
+    });
+  }
+  resolveStudentPhoto(student) {
+    const lookupKey = this.getStudentLookupKey(student);
+    if (!lookupKey) {
+      return null;
+    }
+    if (this.resolvedStudentPhotoCache.has(lookupKey)) {
+      return this.resolvedStudentPhotoCache.get(lookupKey) ?? null;
+    }
+    const mappedPath = this.studentPhotoSource?.status === "loaded" ? this.studentPhotoSource.data?.entries[lookupKey] ?? "" : "";
+    const resolvedPath = this.resolveStudentPhotoVaultPath(mappedPath);
+    if (!resolvedPath) {
+      this.resolvedStudentPhotoCache.set(lookupKey, null);
+      return null;
+    }
+    const file = this.app.vault.getAbstractFileByPath(resolvedPath);
+    if (!(file instanceof import_obsidian2.TFile)) {
+      this.resolvedStudentPhotoCache.set(lookupKey, null);
+      return null;
+    }
+    const photo = {
+      src: this.app.vault.getResourcePath(file),
+      path: resolvedPath
+    };
+    this.resolvedStudentPhotoCache.set(lookupKey, photo);
+    return photo;
+  }
+  resolveStudentPhotoVaultPath(rawPath) {
+    const trimmed = rawPath.trim();
+    if (!trimmed) {
+      return "";
+    }
+    if ((trimmed.startsWith("./") || trimmed.startsWith("../")) && this.studentPhotoSource?.path) {
+      const mappingDirectory = getParentPath(this.studentPhotoSource.path);
+      return (0, import_obsidian2.normalizePath)(
+        mappingDirectory ? `${mappingDirectory}/${trimmed}` : trimmed.replace(/^\.\//, "")
+      );
+    }
+    return (0, import_obsidian2.normalizePath)(trimmed.replace(/^\/+/, ""));
+  }
+  getStudentAvatarFallbackText(student) {
+    const name = student.name.trim();
+    if (!name) {
+      return "?";
+    }
+    const words = name.split(/\s+/).filter(Boolean);
+    if (words.length > 1) {
+      return words.slice(0, 2).map((word) => Array.from(word)[0] ?? "").join("");
+    }
+    return Array.from(name.replace(/\s+/g, "")).slice(0, 2).join("") || "?";
   }
   renderMetaRow(parent, label, value) {
     parent.createEl("dt", {
@@ -2390,21 +4174,7 @@ var ClassPageView = class extends import_obsidian2.ItemView {
     );
   }
   getStudentLookupKey(student) {
-    if (!this.hasStudentLookupIdentity(student)) {
-      return null;
-    }
-    return [
-      student.classroom.trim().toLowerCase(),
-      student.number.trim().toLowerCase(),
-      student.name.trim().toLowerCase()
-    ].join("|");
-  }
-  hasStudentLookupIdentity(student) {
-    return [
-      student.classroom,
-      student.number,
-      student.name
-    ].some((value) => value.trim().length > 0);
+    return getStudentLookupKey(student);
   }
   findClassResponseByStudent(responses, student) {
     const key = this.getStudentLookupKey(student);
@@ -2415,13 +4185,16 @@ var ClassPageView = class extends import_obsidian2.ItemView {
     return key ? responses.get(key) ?? null : null;
   }
   buildClassResponseDrilldownItem(student) {
+    const summary = buildStructuredText([
+      student.goal ? `\uC624\uB298 \uBAA9\uD45C: ${student.goal}` : "",
+      student.yesterdayAchievement ? `\uC5B4\uC81C \uB2EC\uC131\uB3C4: ${student.yesterdayAchievement}` : ""
+    ], "\uC81C\uCD9C \uC751\uB2F5 \uC0C1\uC138 \uBCF4\uAE30");
     return {
       title: formatStudentLabel(student.student),
       meta: student.mood || student.emotionLabel || "\uC0C1\uD0DC \uD655\uC778 \uD544\uC694",
-      summary: [
-        student.goal ? `\uC624\uB298 \uBAA9\uD45C: ${student.goal}` : "",
-        student.yesterdayAchievement ? `\uC5B4\uC81C \uB2EC\uC131\uB3C4: ${student.yesterdayAchievement}` : ""
-      ].filter(Boolean).join(" / ") || "\uC81C\uCD9C \uC751\uB2F5 \uC0C1\uC138 \uBCF4\uAE30",
+      summary: summary.text,
+      summaryLines: summary.lines,
+      student: student.student,
       fields: this.compactDrilldownFields([
         ["\uC815\uC11C \uBD84\uB958", student.emotionLabel],
         ["\uC624\uB298 \uAE30\uBD84", student.mood],
@@ -2441,6 +4214,7 @@ var ClassPageView = class extends import_obsidian2.ItemView {
       meta: student.mood || "\uC0C1\uD0DC \uD655\uC778 \uD544\uC694",
       summary: student.reason || "\uB3C4\uC6C0\uC774 \uD544\uC694\uD55C \uADFC\uAC70 \uBCF4\uAE30",
       tone: "warning",
+      student: student.student,
       fields: this.compactDrilldownFields([
         ["\uB3C4\uC6C0 \uD544\uC694 \uADFC\uAC70", student.reason],
         ["\uC624\uB298 \uBAA9\uD45C", student.goal],
@@ -2459,6 +4233,7 @@ var ClassPageView = class extends import_obsidian2.ItemView {
       meta: student.mentionedPeer ? `\uC5B8\uAE09 \uCE5C\uAD6C: ${student.mentionedPeer}` : "\uCE6D\uCC2C \uD6C4\uBCF4",
       summary: student.reason || "\uCE6D\uCC2C \uC0AC\uC720 \uBCF4\uAE30",
       tone: "positive",
+      student: student.student,
       fields: this.compactDrilldownFields([
         ["\uCE6D\uCC2C \uC0AC\uC720", student.reason],
         ["\uC5B8\uAE09 \uCE5C\uAD6C", student.mentionedPeer],
@@ -2470,13 +4245,16 @@ var ClassPageView = class extends import_obsidian2.ItemView {
   }
   buildLessonStudentDrilldownItem(student) {
     const followUp = this.normalizeLessonFollowUpValue(student.followUp);
+    const summary = buildStructuredText([
+      student.assignmentStatus ? `\uBCF5\uC2B5/\uC218\uD589: ${student.assignmentStatus}` : "",
+      followUp ? `\uD6C4\uC18D: ${followUp}` : ""
+    ], "\uC218\uC5C5 \uC751\uB2F5 \uC0C1\uC138 \uBCF4\uAE30");
     return {
       title: formatStudentLabel(student.student),
       meta: `\uC815\uB2F5 ${student.correctCount} / \uC624\uB2F5 ${student.incorrectCount}`,
-      summary: [
-        student.assignmentStatus ? `\uBCF5\uC2B5/\uC218\uD589: ${student.assignmentStatus}` : "",
-        followUp ? `\uD6C4\uC18D: ${followUp}` : ""
-      ].filter(Boolean).join(" / ") || "\uC218\uC5C5 \uC751\uB2F5 \uC0C1\uC138 \uBCF4\uAE30",
+      summary: summary.text,
+      summaryLines: summary.lines,
+      student: student.student,
       fields: this.compactDrilldownFields([
         ["\uB2E8\uC6D0", student.lessonUnit],
         ["\uC815\uB2F5 \uC218", String(student.correctCount)],
@@ -2493,17 +4271,20 @@ var ClassPageView = class extends import_obsidian2.ItemView {
   }
   buildLessonSupportDrilldownItem(student, response) {
     const followUp = this.normalizeLessonFollowUpValue(response?.followUp || "") || "\uBCF4\uCDA9 \uC124\uBA85 \uD544\uC694";
+    const summary = buildStructuredText([
+      student.assignmentStatus ? `\uBCF5\uC2B5/\uC218\uD589: ${student.assignmentStatus}` : "",
+      student.misconception ? `\uD5F7\uAC08\uB9B0 \uBD80\uBD84: ${student.misconception}` : ""
+    ], "\uBCF4\uCDA9 \uC9C0\uB3C4 \uADFC\uAC70 \uBCF4\uAE30");
     return {
       title: formatStudentLabel(student.student),
       meta: [
         this.getLessonFollowUpBadge(followUp),
         `\uC815\uB2F5 ${student.correctCount} / \uC624\uB2F5 ${student.incorrectCount}`
       ].filter(Boolean).join(" \xB7 "),
-      summary: [
-        student.assignmentStatus ? `\uBCF5\uC2B5/\uC218\uD589: ${student.assignmentStatus}` : "",
-        student.misconception ? `\uD5F7\uAC08\uB9B0 \uBD80\uBD84: ${student.misconception}` : ""
-      ].filter(Boolean).join(" / ") || "\uBCF4\uCDA9 \uC9C0\uB3C4 \uADFC\uAC70 \uBCF4\uAE30",
+      summary: summary.text,
+      summaryLines: summary.lines,
       tone: this.getLessonFollowUpTone(followUp) ?? "warning",
+      student: student.student,
       fields: this.compactDrilldownFields([
         ["\uBCF5\uC2B5/\uC218\uD589 \uC0C1\uD0DC", student.assignmentStatus],
         ["\uD6C4\uC18D \uC9C0\uB3C4", followUp],
@@ -2517,17 +4298,20 @@ var ClassPageView = class extends import_obsidian2.ItemView {
   }
   buildStudentResultDrilldownItem(result, response) {
     const followUp = this.normalizeLessonFollowUpValue(result.followUp);
+    const summary = buildStructuredText([
+      result.assignmentStatus ? `\uBCF5\uC2B5/\uC218\uD589: ${result.assignmentStatus}` : "",
+      followUp ? `\uD6C4\uC18D \uC9C0\uB3C4: ${followUp}` : ""
+    ], "\uD559\uC0DD\uBCC4 \uACB0\uACFC \uBCF4\uAE30");
     return {
       title: formatStudentLabel(result.student),
       meta: [
         this.getLessonFollowUpBadge(followUp),
         `\uC815\uB2F5 ${result.correctCount} / \uC624\uB2F5 ${result.incorrectCount}`
       ].filter(Boolean).join(" \xB7 "),
-      summary: [
-        result.assignmentStatus ? `\uBCF5\uC2B5/\uC218\uD589: ${result.assignmentStatus}` : "",
-        followUp ? `\uD6C4\uC18D \uC9C0\uB3C4: ${followUp}` : ""
-      ].filter(Boolean).join(" / ") || "\uD559\uC0DD\uBCC4 \uACB0\uACFC \uBCF4\uAE30",
+      summary: summary.text,
+      summaryLines: summary.lines,
       tone: this.getLessonFollowUpTone(followUp),
+      student: result.student,
       fields: this.compactDrilldownFields([
         ["\uBCF5\uC2B5/\uC218\uD589 \uC0C1\uD0DC", result.assignmentStatus],
         ["\uD6C4\uC18D \uC9C0\uB3C4", followUp],
@@ -2542,18 +4326,23 @@ var ClassPageView = class extends import_obsidian2.ItemView {
     const supportKeys = new Set(
       summary.supportStudents.map((student) => this.getStudentLookupKey(student.student)).filter((key) => key !== null)
     );
-    const supportItems = summary.supportStudents.slice().sort((left, right) => {
-      if (right.incorrectCount !== left.incorrectCount) {
-        return right.incorrectCount - left.incorrectCount;
-      }
-      return left.student.name.localeCompare(right.student.name, "ko-KR");
-    }).map(
+    const sortedSupportStudents = this.sortItemsByStudentPreference(summary.supportStudents, {
+      getStudent: (student) => student.student,
+      getRiskScore: (student) => student.incorrectCount * 3 + (student.assignmentStatus.includes("\uBBF8\uC644\uB8CC") ? 5 : 0) + (student.assignmentStatus.includes("\uBD80\uBD84") ? 2 : 0),
+      getRecentRank: (_student, index) => index
+    });
+    const supportItems = sortedSupportStudents.map(
       (student) => this.buildLessonSupportDrilldownItem(
         student,
         this.findLessonResponseByStudent(responseMap, student.student)
       )
     );
-    const extraItems = this.getSortedLessonStudentResults(summary).filter((result) => {
+    const extraItems = this.sortItemsByStudentPreference(this.getSortedLessonStudentResults(summary), {
+      getStudent: (student) => student.student,
+      getRiskScore: (student) => this.getLessonResultRiskScore(student),
+      getPraiseScore: (student) => this.getLessonResultPraiseScore(student),
+      getRecentRank: (_student, index) => index
+    }).filter((result) => {
       const key = this.getStudentLookupKey(result.student);
       if (key && supportKeys.has(key)) {
         return false;
@@ -2916,7 +4705,7 @@ var ClassPageView = class extends import_obsidian2.ItemView {
     });
     card.createEl("p", {
       cls: "classpage-empty-card__message",
-      text: "\uC120\uD0DD\uD55C \uACFC\uBAA9 \uC548\uC5D0\uC11C \uC9C0\uAE08 \uC870\uAC74\uC5D0 \uB9DE\uB294 \uC218\uC5C5 \uADF8\uB8F9\uC774 \uC5C6\uC2B5\uB2C8\uB2E4. \uCD5C\uADFC \uC218\uC5C5 \uBC94\uC704\uB97C \uB113\uD788\uAC70\uB098 \uB2E8\uC6D0, \uB0A0\uC9DC \uC120\uD0DD\uC744 \uB2E4\uC2DC \uD655\uC778\uD574 \uC8FC\uC138\uC694."
+      text: "\uD654\uBA74\uC740 \uC815\uC0C1\uC785\uB2C8\uB2E4. \uC120\uD0DD\uD55C \uACFC\uBAA9 \uC548\uC5D0\uC11C \uC9C0\uAE08 \uC870\uAC74\uC5D0 \uB9DE\uB294 \uC218\uC5C5 \uADF8\uB8F9\uB9CC \uC544\uC9C1 \uC5C6\uC2B5\uB2C8\uB2E4. \uCD5C\uADFC \uC218\uC5C5 \uBC94\uC704\uB97C \uB113\uD788\uAC70\uB098 \uB2E8\uC6D0, \uB0A0\uC9DC \uC120\uD0DD\uC744 \uB2E4\uC2DC \uD655\uC778\uD574 \uC8FC\uC138\uC694."
     });
     card.createEl("p", {
       cls: "classpage-empty-card__detail",
@@ -3138,6 +4927,7 @@ var ClassPageView = class extends import_obsidian2.ItemView {
         previewEvents.length > 0 ? `\uCD5C\uADFC \uD750\uB984: ${this.buildStarRecentEventSummary(previewEvents, rules)}` : "\uCD5C\uADFC \uD45C\uC2DC \uC774\uBCA4\uD2B8\uAC00 \uC5C6\uC2B5\uB2C8\uB2E4."
       ].filter(Boolean).join(" / "),
       tone: total.hiddenAdjustmentTotal < 0 ? "warning" : total.hiddenAdjustmentTotal > 0 ? "positive" : void 0,
+      student: total.student,
       fields: this.compactDrilldownFields([
         ["\uD559\uC0DD \uACF5\uAC1C \uB204\uC801", formatSignedPoints(total.visibleTotal)],
         ["\uC120\uC0DD\uB2D8 \uC870\uC815 \uD569\uACC4", formatSignedPoints(total.hiddenAdjustmentTotal)],
@@ -3261,34 +5051,40 @@ var ClassPageView = class extends import_obsidian2.ItemView {
     const needsFollowUpCount = partialCount + incompleteCount;
     const supportPreview = summary.supportStudents.slice(0, 3).map((student) => formatStudentLabel(student.student)).join(", ");
     const topConcept = summary.difficultConcepts[0];
+    const supportDetails = buildStructuredText([
+      supportPreview ? `\uBA3C\uC800 \uBCFC \uD559\uC0DD: ${supportPreview}` : "",
+      summary.supportStudents[0]?.misconception ? `\uD575\uC2EC \uC624\uAC1C\uB150: ${summary.supportStudents[0].misconception}` : ""
+    ], "\uD604\uC7AC\uB294 \uBCF4\uCDA9 \uC124\uBA85 \uC6B0\uC120 \uD559\uC0DD\uC774 \uC5C6\uC2B5\uB2C8\uB2E4.");
+    const assignmentDetails = buildStructuredText([
+      incompleteCount > 0 ? `\uBBF8\uC644\uB8CC ${incompleteCount}\uBA85` : "",
+      partialCount > 0 ? `\uBD80\uBD84 \uC644\uB8CC ${partialCount}\uBA85` : "",
+      summary.overview.assignmentCompletionLabel ? `\uC804\uCCB4 \uD750\uB984: ${summary.overview.assignmentCompletionLabel}` : ""
+    ], `\uC804\uCCB4 \uD750\uB984: ${summary.overview.assignmentCompletionLabel || "\uBBF8\uBD84\uB958"}`);
+    const conceptDetails = buildStructuredText([
+      topConcept?.concept || "",
+      topConcept?.averageUnderstanding || "",
+      topConcept?.note || ""
+    ], "\uD604\uC7AC \uB2E4\uC2DC \uC124\uBA85\uC774 \uD544\uC694\uD55C \uB300\uD45C \uAC1C\uB150\uC774 \uC5C6\uC2B5\uB2C8\uB2E4.");
     return [
       {
         title: "\uBCF4\uCDA9 \uC124\uBA85\uC774 \uD544\uC694\uD55C \uD559\uC0DD",
         meta: summary.supportStudents.length > 0 ? `${summary.supportStudents.length}\uBA85` : "\uC5C6\uC74C",
-        description: summary.supportStudents.length > 0 ? [
-          supportPreview ? `\uBA3C\uC800 \uBCFC \uD559\uC0DD: ${supportPreview}` : "",
-          summary.supportStudents[0]?.misconception ? `\uD575\uC2EC \uC624\uAC1C\uB150: ${summary.supportStudents[0].misconception}` : ""
-        ].filter(Boolean).join(" / ") : "\uD604\uC7AC\uB294 \uBCF4\uCDA9 \uC124\uBA85 \uC6B0\uC120 \uD559\uC0DD\uC774 \uC5C6\uC2B5\uB2C8\uB2E4.",
+        description: supportDetails.text,
+        detailLines: summary.supportStudents.length > 0 ? supportDetails.lines : void 0,
         tone: summary.supportStudents.length > 0 ? "warning" : "positive"
       },
       {
         title: "\uBCF5\uC2B5/\uC218\uD589 \uBBF8\uC644\uB8CC \uD655\uC778",
         meta: needsFollowUpCount > 0 ? `${needsFollowUpCount}\uBA85` : "\uC5C6\uC74C",
-        description: needsFollowUpCount > 0 ? [
-          incompleteCount > 0 ? `\uBBF8\uC644\uB8CC ${incompleteCount}\uBA85` : "",
-          partialCount > 0 ? `\uBD80\uBD84 \uC644\uB8CC ${partialCount}\uBA85` : "",
-          summary.overview.assignmentCompletionLabel ? `\uC804\uCCB4 \uD750\uB984: ${summary.overview.assignmentCompletionLabel}` : ""
-        ].filter(Boolean).join(" / ") : `\uC804\uCCB4 \uD750\uB984: ${summary.overview.assignmentCompletionLabel || "\uBBF8\uBD84\uB958"}`,
+        description: assignmentDetails.text,
+        detailLines: needsFollowUpCount > 0 ? assignmentDetails.lines : void 0,
         tone: needsFollowUpCount > 0 ? "warning" : void 0
       },
       {
         title: "\uC7AC\uC124\uBA85 \uD544\uC694\uD55C \uAC1C\uB150",
         meta: topConcept ? `${topConcept.count}\uBA85` : "\uC5C6\uC74C",
-        description: topConcept ? [
-          topConcept.concept,
-          topConcept.averageUnderstanding,
-          topConcept.note
-        ].filter(Boolean).join(" / ") : "\uD604\uC7AC \uB2E4\uC2DC \uC124\uBA85\uC774 \uD544\uC694\uD55C \uB300\uD45C \uAC1C\uB150\uC774 \uC5C6\uC2B5\uB2C8\uB2E4.",
+        description: conceptDetails.text,
+        detailLines: topConcept ? conceptDetails.lines : void 0,
         tone: topConcept ? "warning" : void 0
       }
     ];
@@ -3298,6 +5094,11 @@ var ClassPageView = class extends import_obsidian2.ItemView {
   }
   buildStarOperationRows(ledger, visibleRules, teacherOnlyRules, manualRules) {
     const customDeltaRules = manualRules.filter((rule) => rule.allowCustomDelta);
+    const manualOperationDetails = buildStructuredText([
+      "\uC6B4\uC601 \uADDC\uCE59: \uC790\uB3D9\uD654 \uC124\uC815\uC5D0\uC11C \uAD00\uB9AC",
+      "\uC785\uB825 \uC704\uCE58: \uBCC4\uC810 \uC218\uB3D9 \uC870\uC815 \uC2DC\uD2B8",
+      customDeltaRules.length > 0 ? `\uD589\uBCC4 \uC810\uC218 \uB36E\uC5B4\uC4F0\uAE30 \uD5C8\uC6A9 ${customDeltaRules.length}\uAC1C` : "\uD589\uBCC4 \uC810\uC218 \uB36E\uC5B4\uC4F0\uAE30 \uD5C8\uC6A9 \uC5C6\uC74C"
+    ], "");
     return [
       {
         title: "\uC9C0\uAE08 \uD655\uC778 \uAC00\uB2A5\uD55C \uB0B4\uC6A9",
@@ -3312,11 +5113,8 @@ var ClassPageView = class extends import_obsidian2.ItemView {
       {
         title: "\uC218\uB3D9 \uC870\uC815 \uAE30\uC900",
         meta: `\uC218\uB3D9 \uADDC\uCE59 ${manualRules.length}\uAC1C`,
-        description: [
-          "\uC6B4\uC601 \uADDC\uCE59: \uC790\uB3D9\uD654 \uC124\uC815\uC5D0\uC11C \uAD00\uB9AC",
-          "\uC785\uB825 \uC704\uCE58: \uBCC4\uC810 \uC218\uB3D9 \uC870\uC815 \uC2DC\uD2B8",
-          customDeltaRules.length > 0 ? `\uD589\uBCC4 \uC810\uC218 \uB36E\uC5B4\uC4F0\uAE30 \uD5C8\uC6A9 ${customDeltaRules.length}\uAC1C` : "\uD589\uBCC4 \uC810\uC218 \uB36E\uC5B4\uC4F0\uAE30 \uD5C8\uC6A9 \uC5C6\uC74C"
-        ].join(" / ")
+        description: manualOperationDetails.text,
+        detailLines: manualOperationDetails.lines
       },
       {
         title: "\uC77C\uAD04 \uBD80\uC5EC \uD750\uB984",
@@ -3342,6 +5140,15 @@ var ClassPageView = class extends import_obsidian2.ItemView {
     ];
   }
   buildStarRuleRow(rule, summary) {
+    const description = buildStructuredText([
+      getStarCategoryLabel(rule.category),
+      summary && summary.automaticCount > 0 ? `\uC790\uB3D9 ${summary.automaticCount}\uAC74` : "",
+      summary && summary.manualCount > 0 ? `\uC218\uB3D9 ${summary.manualCount}\uAC74` : "",
+      getStarRuleSourceSummary(rule.sources),
+      getStarAutoCriteriaSummary(rule.autoCriteria),
+      rule.sources.includes("manual") ? rule.allowCustomDelta ? "\uD589\uBCC4 \uC810\uC218 \uB36E\uC5B4\uC4F0\uAE30 \uD5C8\uC6A9" : "\uD589\uBCC4 \uC810\uC218\uB294 \uAE30\uBCF8\uAC12 \uACE0\uC815" : "\uC790\uB3D9 \uC801\uB9BD \uC804\uC6A9",
+      rule.description
+    ], "\uC124\uBA85 \uC5C6\uC74C");
     return {
       title: rule.label,
       meta: [
@@ -3349,28 +5156,24 @@ var ClassPageView = class extends import_obsidian2.ItemView {
         getStarVisibilityLabel(rule.visibility),
         summary ? `${summary.eventCount}\uAC74` : ""
       ].filter(Boolean).join(" \xB7 "),
-      description: [
-        getStarCategoryLabel(rule.category),
-        summary && summary.automaticCount > 0 ? `\uC790\uB3D9 ${summary.automaticCount}\uAC74` : "",
-        summary && summary.manualCount > 0 ? `\uC218\uB3D9 ${summary.manualCount}\uAC74` : "",
-        getStarRuleSourceSummary(rule.sources),
-        getStarAutoCriteriaSummary(rule.autoCriteria),
-        rule.sources.includes("manual") ? rule.allowCustomDelta ? "\uD589\uBCC4 \uC810\uC218 \uB36E\uC5B4\uC4F0\uAE30 \uD5C8\uC6A9" : "\uD589\uBCC4 \uC810\uC218\uB294 \uAE30\uBCF8\uAC12 \uACE0\uC815" : "\uC790\uB3D9 \uC801\uB9BD \uC804\uC6A9",
-        rule.description
-      ].filter(Boolean).join(" / "),
+      description: description.text,
+      detailLines: description.lines,
       tone: rule.delta < 0 ? "warning" : "positive"
     };
   }
   buildStarAdjustmentTotalRow(total) {
+    const description = buildStructuredText([
+      `\uCD1D ${formatSignedPoints(total.total)}`,
+      `\uD559\uC0DD \uACF5\uAC1C ${formatSignedPoints(total.visibleTotal)}`,
+      `\uC774\uBCA4\uD2B8 ${total.eventCount}\uAC74`
+    ], "");
     return {
       title: formatStudentLabel(total.student),
       meta: `\uC120\uC0DD\uB2D8 \uC870\uC815 ${formatSignedPoints(total.hiddenAdjustmentTotal)}`,
-      description: [
-        `\uCD1D ${formatSignedPoints(total.total)}`,
-        `\uD559\uC0DD \uACF5\uAC1C ${formatSignedPoints(total.visibleTotal)}`,
-        `\uC774\uBCA4\uD2B8 ${total.eventCount}\uAC74`
-      ].join(" / "),
-      tone: total.hiddenAdjustmentTotal < 0 ? "warning" : "positive"
+      description: description.text,
+      detailLines: description.lines,
+      tone: total.hiddenAdjustmentTotal < 0 ? "warning" : "positive",
+      student: total.student
     };
   }
   getTeacherStatusPrimaryValue(mode, sourceState) {
@@ -3394,8 +5197,14 @@ var ClassPageView = class extends import_obsidian2.ItemView {
       return sourceState?.message || "\uC9D1\uACC4 \uD30C\uC77C \uC0C1\uD0DC\uB97C \uD655\uC778\uD574 \uC8FC\uC138\uC694.";
     }
     if (mode === "class" && sourceState.data.type === "class-summary") {
+      const missingSnapshot = this.buildMissingSubmissionSnapshot(
+        "\uD559\uAE09\uC6A9 \uD3FC",
+        sourceState.data.classroom,
+        sourceState.data.studentResponses.map((item) => item.student)
+      );
       return [
         `\uC751\uB2F5 ${sourceState.data.responseCount}\uAC74`,
+        missingSnapshot.rosterStatus === "loaded" ? `\uBBF8\uC81C\uCD9C ${missingSnapshot.missingStudents.length}\uBA85` : "",
         sourceState.data.periodLabel
       ].filter(Boolean).join(" \xB7 ");
     }
@@ -3408,9 +5217,15 @@ var ClassPageView = class extends import_obsidian2.ItemView {
         ].filter(Boolean).join(" \xB7 ");
       }
       const selectedSummary = explorer.selectedGroup;
+      const missingSnapshot = this.buildMissingSubmissionSnapshot(
+        "\uD604\uC7AC \uC120\uD0DD\uD55C \uC218\uC5C5",
+        selectedSummary.classroom || sourceState.data.classroom,
+        selectedSummary.studentResponses.map((item) => item.student)
+      );
       return [
         selectedSummary.label,
         `\uC751\uB2F5 ${selectedSummary.responseCount}\uAC74`,
+        missingSnapshot.rosterStatus === "loaded" ? `\uBBF8\uC81C\uCD9C ${missingSnapshot.missingStudents.length}\uBA85` : "",
         selectedSummary.supportStudents.length > 0 ? `\uBCF4\uCDA9 \uC9C0\uB3C4 ${selectedSummary.supportStudents.length}\uBA85` : ""
       ].filter(Boolean).join(" \xB7 ");
     }
@@ -3446,18 +5261,24 @@ var ClassPageView = class extends import_obsidian2.ItemView {
     }
   }
   getTeacherSourceDescription() {
-    return "\uBB38\uC81C\uAC00 \uC0DD\uAE30\uBA74 \uC774 \uC139\uC158\uC5D0\uC11C \uC9D1\uACC4 \uD30C\uC77C \uACBD\uB85C, \uC9D1\uACC4 \uC2DC\uAC01, \uC6D0\uBCF8 \uC2DC\uD2B8 \uC774\uB984\uC744 \uD655\uC778\uD569\uB2C8\uB2E4.";
+    return "\uBB38\uC81C\uAC00 \uC0DD\uAE30\uBA74 \uC774 \uC139\uC158\uC5D0\uC11C \uC9D1\uACC4 \uD30C\uC77C \uACBD\uB85C, \uD559\uC0DD \uBA85\uB2E8 \uC5F0\uACB0, \uC9D1\uACC4 \uC2DC\uAC01, \uC6D0\uBCF8 \uC2DC\uD2B8 \uC774\uB984, \uD559\uC0DD \uC0AC\uC9C4 \uB9E4\uD551 \uC0C1\uD0DC\uB97C \uD655\uC778\uD569\uB2C8\uB2E4.";
   }
   shouldShowTeacherSection(section) {
     return this.teacherFocusMode === "overview" || this.teacherFocusMode === section;
   }
   buildClassSectionDescription(sourceState) {
     if (!sourceState || sourceState.status !== "loaded" || !sourceState.data) {
-      return "\uD559\uAE09 \uC9D1\uACC4\uAC00 \uC5F0\uACB0\uB418\uBA74 \uC815\uC11C \uC0C1\uD0DC, \uBAA9\uD45C \uB2EC\uC131, \uB3C4\uC6C0 \uD544\uC694 \uD559\uC0DD, \uCE6D\uCC2C \uD6C4\uBCF4\uB97C \uC5EC\uAE30\uC11C \uD655\uC778\uD569\uB2C8\uB2E4.";
+      return "\uD559\uAE09 \uC9D1\uACC4\uAC00 \uC5F0\uACB0\uB418\uBA74 \uC815\uC11C \uC0C1\uD0DC, \uBAA9\uD45C \uB2EC\uC131, \uB3C4\uC6C0 \uD544\uC694 \uD559\uC0DD, \uCE6D\uCC2C \uD6C4\uBCF4\uC640 \uBBF8\uC81C\uCD9C \uD559\uC0DD\uC744 \uC5EC\uAE30\uC11C \uD655\uC778\uD569\uB2C8\uB2E4.";
     }
+    const missingSnapshot = this.buildMissingSubmissionSnapshot(
+      "\uD559\uAE09\uC6A9 \uD3FC",
+      sourceState.data.classroom,
+      sourceState.data.studentResponses.map((item) => item.student)
+    );
     return [
       sourceState.data.periodLabel,
       `\uC751\uB2F5 ${sourceState.data.responseCount}\uAC74`,
+      missingSnapshot.rosterStatus === "loaded" ? `\uBBF8\uC81C\uCD9C ${missingSnapshot.missingStudents.length}\uBA85` : "",
       sourceState.data.supportStudents.length > 0 ? `\uC8FC\uC758 ${sourceState.data.supportStudents.length}\uBA85` : "\uC8FC\uC758 \uD559\uC0DD \uC5C6\uC74C",
       sourceState.data.praiseCandidates.length > 0 ? `\uCE6D\uCC2C \uD6C4\uBCF4 ${sourceState.data.praiseCandidates.length}\uBA85` : "",
       sourceState.data.excludedResponseCount > 0 ? `\uC81C\uC678 ${sourceState.data.excludedResponseCount}\uAC74` : ""
@@ -3465,7 +5286,7 @@ var ClassPageView = class extends import_obsidian2.ItemView {
   }
   buildLessonSectionDescription(sourceState) {
     if (!sourceState || sourceState.status !== "loaded" || !sourceState.data) {
-      return "\uC218\uC5C5 \uC9D1\uACC4\uAC00 \uC5F0\uACB0\uB418\uBA74 \uC7AC\uC124\uBA85 \uD544\uC694\uD55C \uAC1C\uB150, \uC815\uC624\uB2F5, \uBCF5\uC2B5/\uC218\uD589 \uC0C1\uD0DC\uB97C \uC5EC\uAE30\uC11C \uD655\uC778\uD569\uB2C8\uB2E4.";
+      return "\uC218\uC5C5 \uC9D1\uACC4\uAC00 \uC5F0\uACB0\uB418\uBA74 \uC7AC\uC124\uBA85 \uD544\uC694\uD55C \uAC1C\uB150, \uC815\uC624\uB2F5, \uBCF5\uC2B5/\uC218\uD589 \uC0C1\uD0DC\uC640 \uBBF8\uC81C\uCD9C \uD559\uC0DD\uC744 \uC5EC\uAE30\uC11C \uD655\uC778\uD569\uB2C8\uB2E4.";
     }
     const explorer = this.getLessonExplorerState(sourceState.data);
     const { selectedSubject, selectedGroup } = explorer;
@@ -3481,6 +5302,11 @@ var ClassPageView = class extends import_obsidian2.ItemView {
       ].filter(Boolean).join(" \xB7 ");
     }
     const followUpCount = this.getAggregateCountByLabel(selectedGroup.assignmentSummary, "\uBD80\uBD84 \uC644\uB8CC") + this.getAggregateCountByLabel(selectedGroup.assignmentSummary, "\uBBF8\uC644\uB8CC");
+    const missingSnapshot = this.buildMissingSubmissionSnapshot(
+      "\uD604\uC7AC \uC120\uD0DD\uD55C \uC218\uC5C5",
+      selectedGroup.classroom || sourceState.data.classroom,
+      selectedGroup.studentResponses.map((item) => item.student)
+    );
     return [
       selectedGroup.label,
       this.buildLessonScopeDescription(explorer, {
@@ -3488,6 +5314,7 @@ var ClassPageView = class extends import_obsidian2.ItemView {
         includeCurrentGroup: false
       }),
       `\uC751\uB2F5 ${selectedGroup.responseCount}\uAC74`,
+      missingSnapshot.rosterStatus === "loaded" ? `\uBBF8\uC81C\uCD9C ${missingSnapshot.missingStudents.length}\uBA85` : "",
       selectedGroup.supportStudents.length > 0 ? `\uBCF4\uCDA9 \uC9C0\uB3C4 ${selectedGroup.supportStudents.length}\uBA85` : "\uBCF4\uCDA9 \uC9C0\uB3C4 \uB300\uC0C1 \uC5C6\uC74C",
       followUpCount > 0 ? `\uD6C4\uC18D \uD655\uC778 ${followUpCount}\uBA85` : "",
       selectedGroup.excludedResponseCount > 0 ? `\uC81C\uC678 ${selectedGroup.excludedResponseCount}\uAC74` : ""
@@ -3534,7 +5361,8 @@ var ClassPageView = class extends import_obsidian2.ItemView {
         event.batchId ? `batch ${event.batchId}` : "",
         event.note || rule?.description || "\uC124\uBA85 \uC5C6\uC74C"
       ].filter(Boolean).join(" / "),
-      tone: event.delta < 0 ? "warning" : "positive"
+      tone: event.delta < 0 ? "warning" : "positive",
+      student: event.student
     };
   }
   buildStarTotalRow(total) {
@@ -3546,7 +5374,8 @@ var ClassPageView = class extends import_obsidian2.ItemView {
         `\uC120\uC0DD\uB2D8 \uC870\uC815 ${formatSignedPoints(total.hiddenAdjustmentTotal)}`,
         `\uC774\uBCA4\uD2B8 ${total.eventCount}\uAC74`
       ].join(" / "),
-      tone: total.hiddenAdjustmentTotal < 0 ? "warning" : "positive"
+      tone: total.hiddenAdjustmentTotal < 0 ? "warning" : "positive",
+      student: total.student
     };
   }
   getAggregateEmptyStateTitle(sourceState) {
@@ -3614,19 +5443,54 @@ var ClassPageView = class extends import_obsidian2.ItemView {
         return "\uC624\uB958";
     }
   }
+  getStudentPhotoSourceStatusLabel(status) {
+    switch (status) {
+      case "disabled":
+        return "\uC120\uD0DD \uC548 \uD568";
+      case "loaded":
+        return "\uC5F0\uACB0\uB428";
+      case "missing":
+        return "\uC5F0\uACB0 \uD544\uC694";
+      case "invalid":
+        return "\uD615\uC2DD \uD655\uC778";
+      default:
+        return "\uC624\uB958";
+    }
+  }
+  getStudentRosterSourceStatusLabel(status) {
+    switch (status) {
+      case "disabled":
+        return "\uC120\uD0DD \uC548 \uD568";
+      case "loaded":
+        return "\uC5F0\uACB0\uB428";
+      case "missing":
+        return "\uC5F0\uACB0 \uD544\uC694";
+      case "invalid":
+        return "\uD615\uC2DD \uD655\uC778";
+      default:
+        return "\uC624\uB958";
+    }
+  }
 };
 var ClassPageSettingTab = class extends import_obsidian2.PluginSettingTab {
   constructor(app, plugin) {
     super(app, plugin);
     this.plugin = plugin;
+    this.rosterImportCsvText = "";
+    this.rosterImportTargetPath = "";
+    this.rosterImportDefaultClassroom = "";
+    this.rosterImportResult = null;
   }
   display() {
     const { containerEl } = this;
     const { settings } = this.plugin;
+    if (!this.rosterImportTargetPath.trim()) {
+      this.rosterImportTargetPath = settings.teacherPage.roster.rosterJsonPath.trim() || "classpage-data/student-roster.json";
+    }
     containerEl.empty();
     containerEl.createEl("h2", { text: "classpage \uC124\uC815" });
     containerEl.createEl("p", {
-      text: "\uD559\uC0DD\uC6A9 \uD654\uBA74\uC740 \uC815\uC801 \uBB38\uAD6C\uC640 Google Form \uB9C1\uD06C\uB97C, \uC120\uC0DD\uB2D8 \uD654\uBA74\uC740 \uC9D1\uACC4 JSON \uACBD\uB85C\uB97C \uC77D\uC2B5\uB2C8\uB2E4. \uD559\uC0DD \uC751\uB2F5 \uC6D0\uBCF8\uC774\uB098 \uC9D1\uACC4 \uB85C\uC9C1 \uC790\uCCB4\uB294 \uC774 \uD50C\uB7EC\uADF8\uC778\uC5D0\uC11C \uC218\uC815\uD558\uC9C0 \uC54A\uC2B5\uB2C8\uB2E4."
+      text: "\uD559\uC0DD\uC6A9 \uD654\uBA74\uC740 \uC815\uC801 \uBB38\uAD6C\uC640 Google Form \uB9C1\uD06C\uB97C, \uC120\uC0DD\uB2D8 \uD654\uBA74\uC740 \uC9D1\uACC4 JSON\uACFC \uC120\uD0DD \uBA85\uB2E8/\uC0AC\uC9C4 JSON \uACBD\uB85C\uB97C \uC77D\uC2B5\uB2C8\uB2E4. \uD559\uC0DD \uC751\uB2F5 \uC6D0\uBCF8\uC774\uB098 \uC9D1\uACC4 \uB85C\uC9C1 \uC790\uCCB4\uB294 \uC774 \uD50C\uB7EC\uADF8\uC778\uC5D0\uC11C \uC218\uC815\uD558\uC9C0 \uC54A\uC2B5\uB2C8\uB2E4."
     });
     new import_obsidian2.Setting(containerEl).setName("\uBC14\uB85C \uC5F4\uAE30").setDesc("\uD604\uC7AC \uC124\uC815\uC73C\uB85C \uAD50\uC2E4 \uD398\uC774\uC9C0\uB97C \uBC14\uB85C \uC5F4\uC5B4 \uD655\uC778\uD569\uB2C8\uB2E4.").addButton((button) => {
       button.setButtonText("\uAD50\uC2E4 \uD398\uC774\uC9C0 \uC5F4\uAE30");
@@ -3737,7 +5601,7 @@ var ClassPageSettingTab = class extends import_obsidian2.PluginSettingTab {
     );
     this.addSettingsSection(
       "\uC120\uC0DD\uB2D8 \uD398\uC774\uC9C0",
-      "\uC120\uC0DD\uB2D8 \uD654\uBA74\uC740 \uC6D0\uBCF8 \uC751\uB2F5\uC774 \uC544\uB2C8\uB77C \uC9D1\uACC4 \uACB0\uACFC\uB97C \uC77D\uC2B5\uB2C8\uB2E4. \uC544\uB798 \uAC12\uC740 \uD45C\uC2DC \uB808\uC774\uC5B4 \uC124\uBA85\uACFC \uC9D1\uACC4 \uACBD\uB85C\uB9CC \uBC14\uAFC9\uB2C8\uB2E4."
+      "\uC120\uC0DD\uB2D8 \uD654\uBA74\uC740 \uC6D0\uBCF8 \uC751\uB2F5\uC774 \uC544\uB2C8\uB77C \uC9D1\uACC4 \uACB0\uACFC\uC640 \uC120\uD0DD \uBA85\uB2E8/\uC0AC\uC9C4 \uD30C\uC77C\uC744 \uC77D\uC2B5\uB2C8\uB2E4. \uC544\uB798 \uAC12\uC740 \uD45C\uC2DC \uB808\uC774\uC5B4 \uC124\uBA85, \uC9D1\uACC4 \uACBD\uB85C, \uD559\uC0DD \uBA85\uB2E8 \uACBD\uB85C, \uD559\uC0DD \uC0AC\uC9C4 \uB9E4\uD551 \uACBD\uB85C\uB9CC \uBC14\uAFC9\uB2C8\uB2E4."
     );
     this.addTextSetting(
       "\uC81C\uBAA9",
@@ -3794,6 +5658,108 @@ var ClassPageSettingTab = class extends import_obsidian2.PluginSettingTab {
       }
     );
     this.addSettingsSection(
+      "\uC120\uC0DD\uB2D8 \uD654\uBA74 \uBCF4\uAE30 \uAE30\uC900",
+      "\uC5B4\uB5A4 \uD559\uC0DD\uC744 \uBA3C\uC800 \uBCF4\uACE0 \uC2F6\uC740\uC9C0 \uC815\uD569\uB2C8\uB2E4. \uBA3C\uC800 \uD504\uB9AC\uC14B\uC744 \uACE0\uB974\uACE0, \uD544\uC694\uD558\uBA74 \uC544\uB798 \uD56D\uBAA9\uC744 \uC870\uAE08\uC529 \uC870\uC815\uD558\uBA74 \uB429\uB2C8\uB2E4."
+    );
+    this.containerEl.createEl("strong", {
+      text: "\uD604\uC7AC \uC801\uC6A9 \uC694\uC57D"
+    });
+    this.containerEl.createEl("p", {
+      text: buildTeacherDashboardPreferenceSummaryLines(
+        settings.teacherPage.dashboardPreferences,
+        {
+          rosterStatus: settings.teacherPage.roster.rosterJsonPath.trim() ? "loaded" : "disabled"
+        }
+      ).join(" ")
+    });
+    this.containerEl.createEl("p", {
+      text: "\uD504\uB9AC\uC14B \uC548\uB0B4: \uAE30\uBCF8\uD615\uC740 \uADE0\uD615 \uC788\uAC8C, \uC704\uD5D8 \uC870\uAE30 \uBC1C\uACAC\uD615\uC740 \uC704\uD5D8/\uD6C4\uC18D\uC9C0\uB3C4 \uC6B0\uC120, \uCE6D\uCC2C \uAC15\uD654\uD615\uC740 \uCE6D\uCC2C/\uACA9\uB824 \uC6B0\uC120, \uBBF8\uC81C\uCD9C \uC9D1\uC911\uD615\uC740 \uBBF8\uC81C\uCD9C \uD655\uC778 \uC6B0\uC120\uC73C\uB85C \uBCF4\uC5EC\uC90D\uB2C8\uB2E4."
+    });
+    this.addDropdownSetting(
+      "\uD504\uB9AC\uC14B",
+      "\uC120\uC0DD\uB2D8 \uD654\uBA74\uC758 \uAE30\uBCF8 \uC2DC\uC120 \uD750\uB984\uC744 \uD55C \uBC88\uC5D0 \uACE0\uB985\uB2C8\uB2E4. \uD504\uB9AC\uC14B\uC744 \uBC14\uAFB8\uBA74 \uC544\uB798 \uCD94\uCC9C\uAC12\uB3C4 \uD568\uAED8 \uBC14\uB01D\uB2C8\uB2E4.",
+      settings.teacherPage.dashboardPreferences.preset,
+      [
+        { value: "default", label: "\uAE30\uBCF8\uD615" },
+        { value: "risk-focus", label: "\uC704\uD5D8 \uC870\uAE30 \uBC1C\uACAC\uD615" },
+        { value: "praise-focus", label: "\uCE6D\uCC2C \uAC15\uD654\uD615" },
+        { value: "submission-focus", label: "\uBBF8\uC81C\uCD9C \uC9D1\uC911\uD615" }
+      ],
+      async (value) => {
+        settings.teacherPage.dashboardPreferences = {
+          ...getTeacherDashboardPresetDefaults(value)
+        };
+        await this.plugin.saveSettings();
+        this.display();
+      }
+    );
+    this.addDropdownSetting(
+      "\uD559\uC0DD \uBAA9\uB85D \uAE30\uBCF8 \uC815\uB82C",
+      "\uBC88\uD638\uC21C\uC740 \uCD9C\uC11D\uBD80\uCC98\uB7FC \uCC3E\uAE30 \uC27D\uACE0, \uC704\uD5D8/\uCE6D\uCC2C \uC6B0\uC120\uC740 \uD574\uB2F9 \uD559\uC0DD\uC774 \uBA3C\uC800 \uBCF4\uC785\uB2C8\uB2E4.",
+      settings.teacherPage.dashboardPreferences.defaultStudentSort,
+      [
+        { value: "number", label: "\uBC88\uD638\uC21C" },
+        { value: "risk", label: "\uC704\uD5D8 \uC6B0\uC120" },
+        { value: "praise", label: "\uCE6D\uCC2C \uC6B0\uC120" },
+        { value: "recent", label: "\uCD5C\uADFC \uBC18\uC601 \uC21C" }
+      ],
+      async (value) => {
+        settings.teacherPage.dashboardPreferences.defaultStudentSort = value;
+        await this.plugin.saveSettings();
+        this.display();
+      }
+    );
+    this.addToggleSetting(
+      "\uC704\uD5D8 \uD559\uC0DD \uAC15\uC870",
+      "overview\uC640 \uD559\uAE09/\uC218\uC5C5 \uD654\uBA74\uC5D0\uC11C \uB3C4\uC6C0\uC774 \uD544\uC694\uD55C \uD559\uC0DD\uACFC \uD6C4\uC18D\uC9C0\uB3C4\uAC00 \uD544\uC694\uD55C \uD559\uC0DD\uC744 \uB354 \uC55E\uCABD\uC5D0\uC11C \uBCF4\uC774\uAC8C \uD569\uB2C8\uB2E4.",
+      settings.teacherPage.dashboardPreferences.highlightAtRiskStudents,
+      async (value) => {
+        settings.teacherPage.dashboardPreferences.highlightAtRiskStudents = value;
+        await this.plugin.saveSettings();
+        this.display();
+      }
+    );
+    this.addToggleSetting(
+      "\uCE6D\uCC2C/\uACA9\uB824 \uD6C4\uBCF4 \uAC15\uC870",
+      "overview\uC640 \uD559\uAE09 \uD654\uBA74\uC5D0\uC11C \uCE6D\uCC2C\uD558\uAC70\uB098 \uACA9\uB824\uD560 \uD559\uC0DD\uC744 \uB354 \uB208\uC5D0 \uB744\uAC8C \uBCF4\uC5EC\uC90D\uB2C8\uB2E4.",
+      settings.teacherPage.dashboardPreferences.highlightPraiseCandidates,
+      async (value) => {
+        settings.teacherPage.dashboardPreferences.highlightPraiseCandidates = value;
+        await this.plugin.saveSettings();
+        this.display();
+      }
+    );
+    this.addToggleSetting(
+      "\uBBF8\uC81C\uCD9C \uD559\uC0DD \uAC15\uC870",
+      "overview\uC640 \uD559\uAE09/\uC218\uC5C5 \uD654\uBA74\uC5D0\uC11C \uC544\uC9C1 \uC81C\uCD9C\uD558\uC9C0 \uC54A\uC740 \uD559\uC0DD\uC744 \uB354 \uBA3C\uC800 \uD655\uC778\uD558\uAE30 \uC27D\uAC8C \uBCF4\uC5EC\uC90D\uB2C8\uB2E4.",
+      settings.teacherPage.dashboardPreferences.highlightMissingSubmissions,
+      async (value) => {
+        settings.teacherPage.dashboardPreferences.highlightMissingSubmissions = value;
+        await this.plugin.saveSettings();
+        this.display();
+      }
+    );
+    this.addToggleSetting(
+      "overview\uC5D0\uC11C \uBBF8\uC81C\uCD9C \uBA3C\uC800 \uBCF4\uAE30",
+      "\uCCAB \uD654\uBA74 \uCE74\uB4DC \uC21C\uC11C\uC5D0\uC11C \uBBF8\uC81C\uCD9C \uD559\uC0DD \uCE74\uB4DC\uB97C \uB354 \uC55E\uCABD\uC5D0 \uB461\uB2C8\uB2E4.",
+      settings.teacherPage.dashboardPreferences.prioritizeMissingSubmissionsInOverview,
+      async (value) => {
+        settings.teacherPage.dashboardPreferences.prioritizeMissingSubmissionsInOverview = value;
+        await this.plugin.saveSettings();
+        this.display();
+      }
+    );
+    this.addToggleSetting(
+      "overview\uC5D0\uC11C \uC218\uC5C5 \uD6C4\uC18D\uC9C0\uB3C4 \uBA3C\uC800 \uBCF4\uAE30",
+      "\uCCAB \uD654\uBA74 \uCE74\uB4DC \uC21C\uC11C\uC5D0\uC11C \uC218\uC5C5 \uD6C4\uC18D\uC9C0\uB3C4\uC640 \uBC14\uB85C \uBCFC \uD559\uC0DD\uC744 \uB354 \uC55E\uCABD\uC5D0 \uB461\uB2C8\uB2E4.",
+      settings.teacherPage.dashboardPreferences.prioritizeLessonFollowUpInOverview,
+      async (value) => {
+        settings.teacherPage.dashboardPreferences.prioritizeLessonFollowUpInOverview = value;
+        await this.plugin.saveSettings();
+        this.display();
+      }
+    );
+    this.addSettingsSection(
       "\uC9D1\uACC4 JSON \uACBD\uB85C",
       "\uC5EC\uAE30\uC11C\uB294 \uC9D1\uACC4 \uACB0\uACFC \uD30C\uC77C \uACBD\uB85C\uB9CC \uC124\uC815\uD569\uB2C8\uB2E4. Google Sheets\uB098 Apps Script\uC758 \uACC4\uC0B0 \uB85C\uC9C1\uC740 classpage \uBC16\uC5D0\uC11C \uAD00\uB9AC\uD569\uB2C8\uB2E4."
     );
@@ -3827,6 +5793,264 @@ var ClassPageSettingTab = class extends import_obsidian2.PluginSettingTab {
       },
       "classpage-data/star-ledger.json"
     );
+    this.addSettingsSection(
+      "\uD559\uC0DD \uBA85\uB2E8 JSON (\uC120\uD0DD)",
+      "\uBBF8\uC81C\uCD9C \uD559\uC0DD\uC744 \uBCF4\uB824\uBA74 \uD559\uC0DD \uBA85\uB2E8 JSON\uC744 \uC5F0\uACB0\uD569\uB2C8\uB2E4. \uC774 \uD30C\uC77C\uC774 \uC5C6\uC73C\uBA74 \uAE30\uC874 \uD559\uAE09/\uC218\uC5C5/\uBCC4\uC810 \uD654\uBA74\uC740 \uADF8\uB300\uB85C \uC720\uC9C0\uB418\uACE0, \uBBF8\uC81C\uCD9C \uD559\uC0DD\uB9CC \uACC4\uC0B0\uD558\uC9C0 \uC54A\uC2B5\uB2C8\uB2E4."
+    );
+    this.addTextSetting(
+      "\uD559\uC0DD \uBA85\uB2E8 JSON \uACBD\uB85C",
+      "\uBCFC\uD2B8 \uB0B4\uBD80 \uACBD\uB85C\uC785\uB2C8\uB2E4. \uBE44\uC6CC \uB450\uBA74 \uBBF8\uC81C\uCD9C \uD559\uC0DD \uBE44\uAD50\uB97C \uB055\uB2C8\uB2E4.",
+      settings.teacherPage.roster.rosterJsonPath,
+      async (value) => {
+        settings.teacherPage.roster.rosterJsonPath = value.trim();
+        if (value.trim()) {
+          this.rosterImportTargetPath = value.trim();
+        }
+        await this.plugin.saveSettings();
+      },
+      "classpage-data/student-roster.json"
+    );
+    this.renderRosterImportHelper(settings.teacherPage);
+    this.addSettingsSection(
+      "\uD559\uC0DD \uC0AC\uC9C4 \uB9E4\uD551 (\uC120\uD0DD)",
+      "\uC120\uC0DD\uB2D8 \uD654\uBA74\uC5D0\uC11C\uB9CC \uD559\uC0DD \uC0AC\uC9C4\uC744 \uBD99\uC774\uACE0 \uC2F6\uC744 \uB54C \uC0AC\uC6A9\uD569\uB2C8\uB2E4. \uC9D1\uACC4 JSON\uC740 \uADF8\uB300\uB85C \uB450\uACE0, \uBCC4\uB3C4 JSON \uD30C\uC77C\uC5D0\uC11C classroom|number|name -> \uC774\uBBF8\uC9C0 \uACBD\uB85C\uB97C \uC5F0\uACB0\uD569\uB2C8\uB2E4."
+    );
+    this.addTextSetting(
+      "\uD559\uC0DD \uC0AC\uC9C4 \uB9E4\uD551 JSON \uACBD\uB85C",
+      "\uBCFC\uD2B8 \uB0B4\uBD80 \uACBD\uB85C\uC785\uB2C8\uB2E4. \uBE44\uC6CC \uB450\uBA74 \uD559\uC0DD \uC0AC\uC9C4 \uB300\uC2E0 \uC774\uB2C8\uC15C \uC544\uBC14\uD0C0\uB9CC \uD45C\uC2DC\uD569\uB2C8\uB2E4.",
+      settings.teacherPage.studentPhotos.mappingJsonPath,
+      async (value) => {
+        settings.teacherPage.studentPhotos.mappingJsonPath = value.trim();
+        await this.plugin.saveSettings();
+      },
+      "classpage-data/student-photo-map.json"
+    );
+  }
+  renderRosterImportHelper(settings) {
+    this.addSettingsSection(
+      "\uD559\uC0DD \uBA85\uB2E8 \uAC00\uC838\uC624\uAE30 \uB3C4\uC6B0\uBBF8",
+      "JSON\uC744 \uC9C1\uC811 \uB9CC\uB4E4\uAE30 \uC5B4\uB835\uB2E4\uBA74 CSV\uB97C \uBD99\uC5EC\uB123\uAC70\uB098 \uBD88\uB7EC\uC640\uC11C student-roster.json\uC73C\uB85C \uC800\uC7A5\uD560 \uC218 \uC788\uC2B5\uB2C8\uB2E4. \uC800\uC7A5\uC774 \uB05D\uB098\uBA74 \uD559\uC0DD \uBA85\uB2E8 JSON \uACBD\uB85C\uB3C4 \uD568\uAED8 \uB9DE\uCDB0\uC9D1\uB2C8\uB2E4. \uC774\uBC88 \uBC84\uC804\uC740 CSV\uB97C \uC6B0\uC120 \uC9C0\uC6D0\uD569\uB2C8\uB2E4."
+    );
+    this.containerEl.createEl("p", {
+      text: "\uD544\uC218 \uCEEC\uB7FC: classroom/class/\uBC18/\uD559\uAE09, number/no/\uBC88\uD638, name/\uC774\uB984/\uD559\uC0DD\uBA85"
+    });
+    this.containerEl.createEl("p", {
+      text: "\uC120\uD0DD \uCEEC\uB7FC: studentId/\uD559\uBC88, note/\uBE44\uACE0/\uBA54\uBAA8. \uC5D1\uC140\uC774\uB098 \uAD6C\uAE00 \uC2DC\uD2B8\uC5D0\uC11C \uD45C\uB97C \uBCF5\uC0AC\uD574 \uBD99\uC5EC\uB123\uC5B4\uB3C4 \uAE30\uBCF8\uC801\uC73C\uB85C \uC77D\uC744 \uC218 \uC788\uC2B5\uB2C8\uB2E4."
+    });
+    this.containerEl.createEl("pre", {
+      text: [
+        "classroom,number,name,studentId,note",
+        "3-2,01,\uAE40\uBBFC\uC11C,2026-3-2-01,\uD559\uAE09 \uB300\uD45C",
+        "3-2,02,\uBC15\uC900\uD638,2026-3-2-02,"
+      ].join("\n")
+    });
+    const fileInput = this.containerEl.createEl("input", {
+      attr: {
+        type: "file",
+        accept: ".csv,text/csv"
+      }
+    });
+    fileInput.style.display = "none";
+    fileInput.addEventListener("change", async () => {
+      const file = fileInput.files?.[0];
+      if (!file) {
+        return;
+      }
+      try {
+        this.rosterImportCsvText = await file.text();
+        this.rosterImportResult = null;
+        new import_obsidian2.Notice(`CSV \uD30C\uC77C\uC744 \uBD88\uB7EC\uC654\uC2B5\uB2C8\uB2E4: ${file.name}`);
+        this.display();
+      } catch (error) {
+        new import_obsidian2.Notice(
+          error instanceof Error ? `CSV \uD30C\uC77C\uC744 \uC77D\uC9C0 \uBABB\uD588\uC2B5\uB2C8\uB2E4: ${error.message}` : "CSV \uD30C\uC77C\uC744 \uC77D\uC9C0 \uBABB\uD588\uC2B5\uB2C8\uB2E4."
+        );
+      } finally {
+        fileInput.value = "";
+      }
+    });
+    new import_obsidian2.Setting(this.containerEl).setName("CSV \uD30C\uC77C \uBD88\uB7EC\uC624\uAE30").setDesc("\uCEF4\uD4E8\uD130\uC5D0 \uC788\uB294 CSV \uD30C\uC77C\uC744 \uBC14\uB85C \uC77D\uC2B5\uB2C8\uB2E4. XLSX\uB294 \uCD94\uD6C4 \uC9C0\uC6D0 \uC608\uC815\uC785\uB2C8\uB2E4.").addButton((button) => {
+      button.setButtonText("CSV \uD30C\uC77C \uC120\uD0DD");
+      button.onClick(() => fileInput.click());
+    }).addButton((button) => {
+      button.setButtonText("\uC0D8\uD50C \uB123\uAE30");
+      button.onClick(() => {
+        this.rosterImportCsvText = [
+          "classroom,number,name,studentId,note",
+          "3-2,01,\uAE40\uBBFC\uC11C,2026-3-2-01,\uD559\uAE09 \uB300\uD45C",
+          "3-2,02,\uBC15\uC900\uD638,2026-3-2-02,",
+          "3-2,15,\uC774\uC11C\uC724,2026-3-2-15,\uC804\uD559 \uD6C4 \uCCAB \uC8FC"
+        ].join("\n");
+        this.rosterImportResult = null;
+        this.display();
+      });
+    });
+    new import_obsidian2.Setting(this.containerEl).setName("CSV \uB0B4\uC6A9 \uBD99\uC5EC\uB123\uAE30").setDesc("CSV \uD30C\uC77C \uB0B4\uC6A9\uC744 \uADF8\uB300\uB85C \uBD99\uC5EC\uB123\uAC70\uB098, \uC5D1\uC140/\uAD6C\uAE00 \uC2DC\uD2B8\uC5D0\uC11C \uD559\uC0DD \uD45C\uB97C \uBCF5\uC0AC\uD574 \uBD99\uC5EC\uB123\uC2B5\uB2C8\uB2E4.").addTextArea((text) => {
+      text.setValue(this.rosterImportCsvText);
+      text.setPlaceholder("classroom,number,name\n3-2,01,\uAE40\uBBFC\uC11C");
+      text.inputEl.rows = 10;
+      text.inputEl.cols = 60;
+      text.onChange((value) => {
+        this.rosterImportCsvText = value;
+        this.rosterImportResult = null;
+      });
+    });
+    new import_obsidian2.Setting(this.containerEl).setName("\uAE30\uBCF8 \uC800\uC7A5 \uACBD\uB85C").setDesc("\uBE44\uC6CC \uB450\uBA74 \uAE30\uC874 \uBA85\uB2E8 \uACBD\uB85C \uB610\uB294 classpage-data/student-roster.json \uC5D0 \uC800\uC7A5\uD569\uB2C8\uB2E4.").addText((text) => {
+      text.setValue(this.rosterImportTargetPath);
+      text.setPlaceholder("classpage-data/student-roster.json");
+      text.onChange((value) => {
+        this.rosterImportTargetPath = value.trim();
+      });
+    });
+    new import_obsidian2.Setting(this.containerEl).setName("\uAE30\uBCF8 \uD559\uAE09 (\uC120\uD0DD)").setDesc("CSV\uC5D0 \uBC18 \uCEEC\uB7FC\uC774 \uC5C6\uC744 \uB54C\uB9CC \uC0AC\uC6A9\uD569\uB2C8\uB2E4. \uC608: 3-2").addText((text) => {
+      text.setValue(this.rosterImportDefaultClassroom);
+      text.setPlaceholder("\uC608: 3-2");
+      text.onChange((value) => {
+        this.rosterImportDefaultClassroom = value;
+        this.rosterImportResult = null;
+      });
+    });
+    new import_obsidian2.Setting(this.containerEl).setName("\uAC00\uC838\uC624\uAE30 \uD655\uC778").setDesc("\uBA3C\uC800 \uBBF8\uB9AC\uBCF4\uAE30\uB85C \uC77D\uAE30 \uACB0\uACFC\uB97C \uD655\uC778\uD55C \uB4A4 \uC800\uC7A5\uD558\uBA74 \uC548\uC804\uD569\uB2C8\uB2E4.").addButton((button) => {
+      button.setButtonText("\uAC00\uC838\uC624\uAE30 \uBBF8\uB9AC\uBCF4\uAE30");
+      button.onClick(() => {
+        this.rosterImportResult = this.analyzeRosterImport();
+        this.display();
+      });
+    }).addButton((button) => {
+      button.setButtonText("\uBA85\uB2E8 JSON \uC800\uC7A5");
+      button.setCta();
+      button.setDisabled(!this.rosterImportResult?.ok);
+      button.onClick(async () => {
+        await this.saveImportedRoster(settings);
+      });
+    });
+    if (!this.rosterImportResult) {
+      return;
+    }
+    const resultCard = this.containerEl.createDiv();
+    resultCard.createEl("h4", {
+      text: this.rosterImportResult.ok ? "\uAC00\uC838\uC624\uAE30 \uACB0\uACFC" : "\uAC00\uC838\uC624\uAE30 \uD655\uC778 \uD544\uC694"
+    });
+    const messageList = resultCard.createEl("ul");
+    const messages = this.rosterImportResult.summary.messages.length > 0 ? this.rosterImportResult.summary.messages : [this.rosterImportResult.ok ? "\uC77D\uC740 \uACB0\uACFC\uB97C \uC694\uC57D\uD560 \uB0B4\uC6A9\uC774 \uC5C6\uC2B5\uB2C8\uB2E4." : this.rosterImportResult.message];
+    for (const message of messages) {
+      messageList.createEl("li", { text: message });
+    }
+    const detectedColumnText = [
+      this.rosterImportResult.summary.detectedColumns.classroom ? `\uBC18 -> ${this.rosterImportResult.summary.detectedColumns.classroom}` : this.rosterImportDefaultClassroom.trim() ? `\uBC18 -> \uAE30\uBCF8 \uD559\uAE09 ${this.rosterImportDefaultClassroom.trim()}` : "",
+      this.rosterImportResult.summary.detectedColumns.number ? `\uBC88\uD638 -> ${this.rosterImportResult.summary.detectedColumns.number}` : "",
+      this.rosterImportResult.summary.detectedColumns.name ? `\uC774\uB984 -> ${this.rosterImportResult.summary.detectedColumns.name}` : "",
+      this.rosterImportResult.summary.detectedColumns.studentId ? `\uD559\uC0DD ID -> ${this.rosterImportResult.summary.detectedColumns.studentId}` : "",
+      this.rosterImportResult.summary.detectedColumns.note ? `\uBA54\uBAA8 -> ${this.rosterImportResult.summary.detectedColumns.note}` : ""
+    ].filter(Boolean);
+    if (detectedColumnText.length > 0) {
+      resultCard.createEl("p", {
+        text: `\uC77D\uC740 \uCEEC\uB7FC: ${detectedColumnText.join(" / ")}`
+      });
+    }
+    if (this.rosterImportResult.ok && this.rosterImportResult.summary.previewStudents.length > 0) {
+      const previewTitle = resultCard.createEl("p", {
+        text: "\uBBF8\uB9AC\uBCF4\uAE30 \uD559\uC0DD"
+      });
+      previewTitle.addClass("setting-item-description");
+      const previewList = resultCard.createEl("ul");
+      for (const student of this.rosterImportResult.summary.previewStudents) {
+        previewList.createEl("li", {
+          text: formatStudentLabel(student)
+        });
+      }
+      resultCard.createEl("p", {
+        text: `\uC800\uC7A5 \uC704\uCE58: ${this.getRosterImportTargetPath(settings)}`
+      });
+    }
+  }
+  analyzeRosterImport() {
+    return importStudentRosterFromDelimitedText(this.rosterImportCsvText, {
+      defaultClassroom: this.rosterImportDefaultClassroom.trim(),
+      sourceLabel: "classpage CSV \uAC00\uC838\uC624\uAE30"
+    });
+  }
+  async saveImportedRoster(settings) {
+    const result = this.analyzeRosterImport();
+    this.rosterImportResult = result;
+    if (!result.ok) {
+      new import_obsidian2.Notice(result.message);
+      this.display();
+      return;
+    }
+    const targetPath = this.getRosterImportTargetPath(settings);
+    if (!targetPath) {
+      new import_obsidian2.Notice("\uC800\uC7A5 \uACBD\uB85C\uB97C \uBA3C\uC800 \uD655\uC778\uD574 \uC8FC\uC138\uC694.");
+      this.display();
+      return;
+    }
+    try {
+      await this.ensureVaultFolder(targetPath);
+      const roster = {
+        ...result.roster,
+        generatedAt: (/* @__PURE__ */ new Date()).toISOString()
+      };
+      const raw = `${JSON.stringify(roster, null, 2)}
+`;
+      const existing = this.app.vault.getAbstractFileByPath(targetPath);
+      if (existing instanceof import_obsidian2.TFile) {
+        await this.app.vault.modify(existing, raw);
+      } else if (existing) {
+        throw new Error("\uC800\uC7A5 \uACBD\uB85C\uAC00 \uD30C\uC77C\uC774 \uC544\uB2C8\uB77C \uD3F4\uB354\uB85C \uC7A1\uD600 \uC788\uC2B5\uB2C8\uB2E4.");
+      } else {
+        await this.app.vault.create(targetPath, raw);
+      }
+      const pathChanged = settings.roster.rosterJsonPath !== targetPath;
+      if (pathChanged) {
+        settings.roster.rosterJsonPath = targetPath;
+        await this.plugin.saveSettings();
+      } else {
+        this.plugin.refreshOpenViews();
+      }
+      this.rosterImportTargetPath = targetPath;
+      this.rosterImportResult = {
+        ok: true,
+        roster,
+        summary: {
+          ...result.summary,
+          messages: [
+            ...result.summary.messages,
+            `\uBA85\uB2E8 JSON\uC744 ${targetPath} \uC5D0 \uC800\uC7A5\uD588\uC2B5\uB2C8\uB2E4.`,
+            pathChanged ? "\uD559\uC0DD \uBA85\uB2E8 JSON \uACBD\uB85C\uB3C4 \uC774 \uD30C\uC77C\uB85C \uD568\uAED8 \uB9DE\uCDC4\uC2B5\uB2C8\uB2E4." : "",
+            "\uC774\uC81C \uC120\uC0DD\uB2D8 \uD654\uBA74\uC758 \uBBF8\uC81C\uCD9C \uD559\uC0DD \uBE44\uAD50\uC5D0 \uBC14\uB85C \uC0AC\uC6A9\uB429\uB2C8\uB2E4."
+          ].filter(Boolean)
+        }
+      };
+      new import_obsidian2.Notice(
+        pathChanged ? `\uD559\uC0DD ${roster.students.length}\uBA85 \uBA85\uB2E8\uC744 \uC800\uC7A5\uD588\uACE0, \uD559\uC0DD \uBA85\uB2E8 JSON \uACBD\uB85C\uB3C4 \uD568\uAED8 \uB9DE\uCDC4\uC2B5\uB2C8\uB2E4.` : `\uD559\uC0DD ${roster.students.length}\uBA85 \uBA85\uB2E8\uC744 \uC800\uC7A5\uD588\uC2B5\uB2C8\uB2E4. \uC774\uC81C \uBBF8\uC81C\uCD9C \uD559\uC0DD \uBE44\uAD50\uC5D0 \uC0AC\uC6A9\uB429\uB2C8\uB2E4.`
+      );
+      this.display();
+    } catch (error) {
+      new import_obsidian2.Notice(
+        error instanceof Error ? `\uBA85\uB2E8 JSON \uC800\uC7A5\uC5D0 \uC2E4\uD328\uD588\uC2B5\uB2C8\uB2E4: ${error.message}` : "\uBA85\uB2E8 JSON \uC800\uC7A5\uC5D0 \uC2E4\uD328\uD588\uC2B5\uB2C8\uB2E4."
+      );
+      this.display();
+    }
+  }
+  getRosterImportTargetPath(settings) {
+    return (0, import_obsidian2.normalizePath)(
+      (this.rosterImportTargetPath.trim() || settings.roster.rosterJsonPath.trim() || "classpage-data/student-roster.json").replace(/^\/+/, "")
+    );
+  }
+  async ensureVaultFolder(path) {
+    const parentPath = getParentPath(path);
+    if (!parentPath) {
+      return;
+    }
+    const parts = parentPath.split("/").filter(Boolean);
+    let currentPath = "";
+    for (const part of parts) {
+      currentPath = currentPath ? `${currentPath}/${part}` : part;
+      const existing = this.app.vault.getAbstractFileByPath(currentPath);
+      if (!existing) {
+        await this.app.vault.createFolder(currentPath);
+      }
+    }
   }
   buildFormSettings(target, defaults, onSave) {
     this.addTextSetting(
@@ -3884,6 +6108,23 @@ var ClassPageSettingTab = class extends import_obsidian2.PluginSettingTab {
       text.onChange(onChange);
     });
   }
+  addDropdownSetting(name, desc, value, options, onChange) {
+    new import_obsidian2.Setting(this.containerEl).setName(name).setDesc(desc).addDropdown((dropdown) => {
+      for (const option of options) {
+        dropdown.addOption(option.value, option.label);
+      }
+      dropdown.setValue(value);
+      dropdown.onChange(async (nextValue) => {
+        await onChange(nextValue);
+      });
+    });
+  }
+  addToggleSetting(name, desc, value, onChange) {
+    new import_obsidian2.Setting(this.containerEl).setName(name).setDesc(desc).addToggle((toggle) => {
+      toggle.setValue(value);
+      toggle.onChange(onChange);
+    });
+  }
   addTextareaSetting(name, desc, items, onChange, placeholder = "") {
     new import_obsidian2.Setting(this.containerEl).setName(name).setDesc(desc).addTextArea((text) => {
       text.setValue(items.join("\n"));
@@ -3899,6 +6140,42 @@ var ClassPageSettingTab = class extends import_obsidian2.PluginSettingTab {
     });
   }
 };
+function getParentPath(path) {
+  const normalized = (0, import_obsidian2.normalizePath)(path.trim());
+  if (!normalized || !normalized.includes("/")) {
+    return "";
+  }
+  return normalized.slice(0, normalized.lastIndexOf("/"));
+}
+function uniqueTextLines(lines) {
+  const seen = /* @__PURE__ */ new Set();
+  const result = [];
+  for (const line of lines) {
+    const normalized = line.trim();
+    if (!normalized || seen.has(normalized)) {
+      continue;
+    }
+    seen.add(normalized);
+    result.push(normalized);
+  }
+  return result;
+}
+function joinUniqueText(values, separator) {
+  return uniqueTextLines(values).join(separator);
+}
+function compactTextLines(lines) {
+  return lines.map((line) => line.trim()).filter((line) => line.length > 0);
+}
+function buildStructuredText(lines, fallback) {
+  const normalized = compactTextLines(lines);
+  if (normalized.length === 0) {
+    return { text: fallback, lines: fallback ? [fallback] : [] };
+  }
+  return {
+    text: normalized.join(" / "),
+    lines: normalized
+  };
+}
 function formatDateLabel(value, fallback = "\uC9D1\uACC4 \uC2DC\uAC01 \uC815\uBCF4 \uC5C6\uC74C") {
   if (!value) {
     return fallback;
@@ -3913,11 +6190,11 @@ function formatDateLabel(value, fallback = "\uC9D1\uACC4 \uC2DC\uAC01 \uC815\uBC
   }).format(date);
 }
 function formatStudentLabel(student) {
-  const label = [
-    formatClassroomLabel(student.classroom),
-    formatStudentNumberLabel(student.number),
-    student.name.trim()
-  ].filter(Boolean).join(" \xB7 ");
+  const classroomLabel = formatClassroomLabel(student.classroom);
+  const numberLabel = formatStudentNumberLabel(student.number);
+  const nameLabel = student.name.trim();
+  const head = [classroomLabel, numberLabel].filter(Boolean).join(" ").trim();
+  const label = [head, nameLabel].filter(Boolean).join(" ").trim();
   return label || "\uD559\uC0DD \uC815\uBCF4 \uC5C6\uC74C";
 }
 function formatClassroomLabel(classroom) {
@@ -3934,12 +6211,23 @@ function formatClassroomLabel(classroom) {
   if (gradeClassMatch) {
     return `${gradeClassMatch[1]}\uD559\uB144 ${gradeClassMatch[2]}\uBC18`;
   }
+  const classOnlyMatch = normalized.match(/^(\d+)\s*반$/);
+  if (classOnlyMatch) {
+    return `${classOnlyMatch[1]}\uBC18`;
+  }
+  if (/^\d+$/.test(normalized)) {
+    return `${normalized}\uBC18`;
+  }
   return normalized;
 }
 function formatStudentNumberLabel(number) {
   const trimmed = number.trim();
   if (!trimmed) {
     return "";
+  }
+  const numeric = trimmed.match(/^0*(\d+)$/);
+  if (numeric) {
+    return `${numeric[1]}\uBC88`;
   }
   return trimmed.endsWith("\uBC88") ? trimmed : `${trimmed}\uBC88`;
 }
@@ -4084,4 +6372,68 @@ function normalizeLookupText(value) {
 function parseLeadingNumber(value) {
   const match = value.match(/^\d+/);
   return match ? Number(match[0]) : 0;
+}
+function getTeacherDashboardPresetLabel(preset) {
+  switch (preset) {
+    case "risk-focus":
+      return "\uC704\uD5D8 \uC870\uAE30 \uBC1C\uACAC\uD615";
+    case "praise-focus":
+      return "\uCE6D\uCC2C \uAC15\uD654\uD615";
+    case "submission-focus":
+      return "\uBBF8\uC81C\uCD9C \uC9D1\uC911\uD615";
+    default:
+      return "\uAE30\uBCF8\uD615";
+  }
+}
+function getTeacherDashboardStudentSortLabel(sort) {
+  switch (sort) {
+    case "risk":
+      return "\uC704\uD5D8 \uC6B0\uC120";
+    case "praise":
+      return "\uCE6D\uCC2C \uC6B0\uC120";
+    case "recent":
+      return "\uCD5C\uADFC \uBC18\uC601 \uC21C";
+    default:
+      return "\uBC88\uD638\uC21C";
+  }
+}
+function buildTeacherDashboardPreferenceSummaryLines(preferences, options = {}) {
+  const isMissingPriority = preferences.preset === "submission-focus" || preferences.prioritizeMissingSubmissionsInOverview || preferences.highlightMissingSubmissions && !preferences.highlightAtRiskStudents;
+  const isRiskPriority = preferences.preset === "risk-focus" || preferences.prioritizeLessonFollowUpInOverview || preferences.highlightAtRiskStudents && !preferences.highlightPraiseCandidates;
+  const isPraisePriority = preferences.preset === "praise-focus" || preferences.highlightPraiseCandidates && !preferences.highlightAtRiskStudents;
+  const lines = [
+    `\uD604\uC7AC\uB294 ${getTeacherDashboardPresetLabel(preferences.preset)}\uC73C\uB85C \uBCF4\uACE0 \uC788\uC2B5\uB2C8\uB2E4.`,
+    isMissingPriority ? "\uC544\uC9C1 \uC81C\uCD9C\uD558\uC9C0 \uC54A\uC740 \uD559\uC0DD\uC744 \uBA3C\uC800 \uD655\uC778\uD569\uB2C8\uB2E4." : isRiskPriority ? "\uB3C4\uC6C0\uC774 \uD544\uC694\uD55C \uD559\uC0DD\uACFC \uC218\uC5C5 \uD6C4\uC18D\uC9C0\uB3C4\uB97C \uBA3C\uC800 \uC0B4\uD54D\uB2C8\uB2E4." : isPraisePriority ? "\uCE6D\uCC2C/\uACA9\uB824\uD560 \uD559\uC0DD\uC744 \uB354 \uB208\uC5D0 \uB744\uAC8C \uBCF4\uC5EC\uC90D\uB2C8\uB2E4." : "\uD544\uC694\uD55C \uCE74\uB4DC\uB4E4\uC744 \uADE0\uD615 \uC788\uAC8C \uC77D\uC2B5\uB2C8\uB2E4.",
+    `\uD559\uC0DD \uBAA9\uB85D\uC740 ${getTeacherDashboardStudentSortLabel(preferences.defaultStudentSort)}\uC73C\uB85C \uC815\uB82C\uD569\uB2C8\uB2E4.`
+  ];
+  if (isMissingPriority && options.rosterStatus && options.rosterStatus !== "loaded") {
+    lines.push("\uD559\uC0DD \uBA85\uB2E8 JSON\uC744 \uC5F0\uACB0\uD558\uBA74 \uBBF8\uC81C\uCD9C \uAC15\uC870\uAC00 \uD568\uAED8 \uB3D9\uC791\uD569\uB2C8\uB2E4.");
+  }
+  return uniqueTextLines(lines);
+}
+function moveArrayItemToFront(items, target) {
+  const index = items.indexOf(target);
+  if (index <= 0) {
+    return;
+  }
+  items.splice(index, 1);
+  items.unshift(target);
+}
+function moveArrayItemToEnd(items, target) {
+  const index = items.indexOf(target);
+  if (index === -1 || index === items.length - 1) {
+    return;
+  }
+  items.splice(index, 1);
+  items.push(target);
+}
+function moveArrayItemBefore(items, target, before) {
+  const targetIndex = items.indexOf(target);
+  const beforeIndex = items.indexOf(before);
+  if (targetIndex === -1 || beforeIndex === -1 || targetIndex < beforeIndex) {
+    return;
+  }
+  items.splice(targetIndex, 1);
+  const nextBeforeIndex = items.indexOf(before);
+  items.splice(nextBeforeIndex, 0, target);
 }
