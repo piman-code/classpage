@@ -42,7 +42,7 @@
    이미 있는 것과 다음 단계, 나중 단계의 경계를 봅니다.
 5. [docs/templates/STUDENT_PUBLIC_SHARE_NOTE_TEMPLATE.md](docs/templates/STUDENT_PUBLIC_SHARE_NOTE_TEMPLATE.md)
    학생 공개용 안내문을 빠르게 복붙할 때 씁니다.
-6. [docs/releases/0.4.1.md](docs/releases/0.4.1.md)
+6. [docs/releases/0.4.2.md](docs/releases/0.4.2.md)
    이번 베타 릴리즈 노트 초안입니다.
 
 ## 문서 지도
@@ -65,8 +65,8 @@
   현재, 다음, 이후, 선택 기능을 구분한 제품 방향 문서입니다.
 - [docs/DRIVE_SYNC_SETUP.md](docs/DRIVE_SYNC_SETUP.md)
   Drive 자동 갱신 + Mac 자동 복사 운영을 붙일 때 봅니다.
-- [docs/releases/0.4.1.md](docs/releases/0.4.1.md)
-  GitHub Release에 바로 붙여넣을 수 있는 이번 베타 노트 초안입니다.
+- [docs/releases/0.4.2.md](docs/releases/0.4.2.md)
+  GitHub Release에 바로 붙여넣을 수 있는 현재 베타 노트 초안입니다.
 
 ## 제품 설명
 
