@@ -65,8 +65,6 @@
   현재, 다음, 이후, 선택 기능을 구분한 제품 방향 문서입니다.
 - [docs/DRIVE_SYNC_SETUP.md](docs/DRIVE_SYNC_SETUP.md)
   Drive 자동 갱신 + Mac 자동 복사 운영을 붙일 때 봅니다.
-- [docs/TELEGRAM_BOT_AUTOMATION.md](docs/TELEGRAM_BOT_AUTOMATION.md)
-  개인 운영용으로 작업 결과를 텔레그램 행복이봇에 자동 전송하거나, `#codex보냄` inbound bridge를 붙이고 싶을 때 봅니다.
 - [docs/releases/0.4.1.md](docs/releases/0.4.1.md)
   GitHub Release에 바로 붙여넣을 수 있는 이번 베타 노트 초안입니다.
 

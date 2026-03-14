@@ -7,11 +7,7 @@
   "scripts": {
     "build": "node esbuild.config.mjs production",
     "dev": "node esbuild.config.mjs",
-    "typecheck": "tsc --noEmit",
-    "telegram:chat-id": "node scripts/get-telegram-chat-id.mjs",
-    "telegram:send": "node scripts/send-telegram-message.mjs",
-    "telegram:wrap": "node scripts/run-task-with-telegram.mjs",
-    "telegram:bridge": "node scripts/telegram-codex-bridge.mjs"
+    "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
     "@types/node": "^22.13.10",

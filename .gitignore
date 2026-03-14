@@ -4,7 +4,7 @@ main.js.map
 .DS_Store
 classpage-data/
 *.log
-.tmp/telegram-codex-bridge/
+.tmp/
 automation/mac/*.plist
 automation/mac/*-local.sh
 .env
